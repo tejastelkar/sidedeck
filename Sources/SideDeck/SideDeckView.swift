@@ -12,14 +12,30 @@ extension Color {
         let b = Double(hex & 0xFF) / 255.0
         self.init(.sRGB, red: r, green: g, blue: b, opacity: alpha)
     }
+
+    init(light: UInt32, dark: UInt32) {
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            let useDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let value = useDark ? dark : light
+            let r = CGFloat((value >> 16) & 0xFF) / 255
+            let g = CGFloat((value >> 8) & 0xFF) / 255
+            let b = CGFloat(value & 0xFF) / 255
+            return NSColor(srgbRed: r, green: g, blue: b, alpha: 1)
+        })
+    }
 }
 
 enum SideDeckTheme {
-    static let rail = Color(hex: 0x0D0F12)
-    static let surface = Color(hex: 0x171A1F)
-    static let accent = Color(hex: 0x4C8DFF)
-    static let secondaryText = Color(hex: 0x9299A6)
-    static let border = Color(hex: 0x2A2F38)
+    static let canvas = Color(light: 0xEEF1F5, dark: 0x090B0E)
+    static let rail = Color(light: 0xF7F9FC, dark: 0x0D0F12)
+    static let surface = Color(light: 0xFFFFFF, dark: 0x171A1F)
+    static let elevatedSurface = Color(light: 0xF3F6FA, dark: 0x1D2127)
+    static let accent = Color.accentColor
+    static let primaryText = Color(light: 0x15181D, dark: 0xF5F7FA)
+    static let secondaryText = Color(light: 0x626A76, dark: 0x9299A6)
+    static let tertiaryText = Color(light: 0x858D99, dark: 0x69717E)
+    static let border = Color(light: 0xD4DAE3, dark: 0x2A2F38)
+    static let controlFill = Color(light: 0xE8ECF2, dark: 0x252A31)
 
     enum Radius {
         static let rail: CGFloat = 22
@@ -838,7 +854,7 @@ struct SideDeckView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        .stroke(SideDeckTheme.primaryText.opacity(0.12), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -922,7 +938,7 @@ struct SideDeckView: View {
             RoundedRectangle(cornerRadius: SideDeckTheme.Radius.rail, style: .continuous)
                 .stroke(SideDeckTheme.border.opacity(0.9), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.45), radius: 14, x: 0, y: 6)
+        .shadow(color: SideDeckTheme.canvas.opacity(0.45), radius: 14, x: 0, y: 6)
         .onHover { hovering in
             if hovering {
                 hoverState.expandDock()
@@ -975,7 +991,7 @@ struct SideDeckView: View {
             FlyoutCalloutShape(beakY: beakY, isPointingLeft: !isDockOnRight)
                 .stroke(SideDeckTheme.border, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.48), radius: 18, x: 0, y: 8)
+        .shadow(color: SideDeckTheme.canvas.opacity(0.48), radius: 18, x: 0, y: 8)
     }
 
     // MARK: - Coordinate Math for Aligning Beak with Card Center
@@ -1010,7 +1026,7 @@ struct SydedockCardModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: SideDeckTheme.Radius.card, style: .continuous)
                     .stroke(SideDeckTheme.border, lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.22), radius: 3, x: 0, y: 1)
+            .shadow(color: SideDeckTheme.canvas.opacity(0.22), radius: 3, x: 0, y: 1)
     }
 }
 
@@ -1031,7 +1047,7 @@ struct FocusCard: View {
                         .trim(from: 0, to: Double(state.focusRemaining) / Double(state.focusTotal))
                         .stroke(
                             LinearGradient(
-                                colors: [Color(hex: 0x0068fe), Color(hex: 0x1c79ff)],
+                                colors: [SideDeckTheme.accent.opacity(0.88), SideDeckTheme.accent],
                                 startPoint: .top,
                                 endPoint: .bottom
                             ),
@@ -1054,16 +1070,16 @@ struct FocusCard: View {
                 let secs = String(format: "%02d", state.focusRemaining % 60)
                 Text(mins)
                     .font(.system(size: 14.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Text(":")
                     .font(.system(size: 14.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(state.isFocusRunning ? Color(hex: 0x626262) : Color.white.opacity(0.3))
+                    .foregroundColor(state.isFocusRunning ? Color(hex: 0x626262) : SideDeckTheme.primaryText.opacity(0.3))
                 Text(secs)
                     .font(.system(size: 14.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
             }
             .frame(width: 66.2, height: 24.3)
-            .background(Color.black)
+            .background(SideDeckTheme.canvas)
             .cornerRadius(SideDeckTheme.Radius.button)
             .overlay(
                 RoundedRectangle(cornerRadius: SideDeckTheme.Radius.button, style: .continuous)
@@ -1073,7 +1089,7 @@ struct FocusCard: View {
             // Task strip with fade mask
             Text(state.taskName)
                 .font(.system(size: 8.4, weight: .medium, design: .monospaced))
-                .foregroundColor(Color.white.opacity(0.68))
+                .foregroundColor(SideDeckTheme.primaryText.opacity(0.68))
                 .lineLimit(1)
                 .padding(.horizontal, 4)
                 .mask(
@@ -1129,7 +1145,7 @@ struct SydedockBoltGlyph: View {
                 p.addLine(to: CGPoint(x: 62.0 * sx, y: 52.0 * sy))
                 p.closeSubpath()
             }
-            .fill(Color.white)
+            .fill(SideDeckTheme.primaryText)
         }
     }
 }
@@ -1166,17 +1182,17 @@ struct ClockCard: View {
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(timeString)
                     .font(.system(size: state.showSeconds ? 14.5 : 18.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 if !state.is24Hour {
                     Text(meridiemString)
                         .font(.system(size: 7.2, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.5))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.5))
                 }
             }
             if state.showDateOnCard {
                 Text(dateString)
                     .font(.system(size: 9.2, weight: .regular))
-                    .foregroundColor(Color.white.opacity(0.5))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.5))
             }
         }
         .modifier(SydedockCardModifier(height: 55.44))
@@ -1199,14 +1215,14 @@ struct StatusCard: View {
         ZStack {
             // Racetrack Stadium Outline Path with gap at bottom
             RacetrackOutlineShape()
-                .stroke(Color.white.opacity(0.22), lineWidth: 2.8)
+                .stroke(SideDeckTheme.primaryText.opacity(0.22), lineWidth: 2.8)
                 .frame(width: 72, height: 28)
 
             // Filled progress stroke (real Mac battery)
             RacetrackOutlineShape()
                 .trim(from: 0, to: Double(state.batteryLevel) / 100.0)
                 .stroke(
-                    state.isCharging ? Color.green : Color(hex: 0x1c79ff),
+                    state.isCharging ? Color.green : SideDeckTheme.accent,
                     style: StrokeStyle(lineWidth: 2.8, lineCap: .round)
                 )
                 .frame(width: 72, height: 28)
@@ -1216,10 +1232,10 @@ struct StatusCard: View {
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text("\(state.batteryLevel)")
                         .font(.system(size: 12.5, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                     Text("%")
                         .font(.system(size: 7.5, weight: .regular))
-                        .foregroundColor(Color.white.opacity(0.55))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                 }
                 Spacer()
                 // Wi-Fi icon
@@ -1236,7 +1252,7 @@ struct StatusCard: View {
                 HStack(spacing: 3) {
                     ForEach(0..<4) { idx in
                         Circle()
-                            .fill(idx < signalDotsCount ? Color.white : Color.white.opacity(0.25))
+                            .fill(idx < signalDotsCount ? SideDeckTheme.primaryText : SideDeckTheme.primaryText.opacity(0.25))
                             .frame(width: 2.8, height: 2.8)
                     }
                 }
@@ -1279,12 +1295,12 @@ struct WifiIconGlyph: View {
                 p.move(to: CGPoint(x: w * 0.25, y: h * 0.6))
                 p.addQuadCurve(to: CGPoint(x: w * 0.75, y: h * 0.6), control: CGPoint(x: w * 0.5, y: h * 0.25))
             }
-            .stroke(Color.white, style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
+            .stroke(SideDeckTheme.primaryText, style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
 
             Path { p in
                 p.addArc(center: CGPoint(x: w * 0.5, y: h * 0.85), radius: 1.2, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: true)
             }
-            .fill(Color.white)
+            .fill(SideDeckTheme.primaryText)
         }
     }
 }
@@ -1303,17 +1319,17 @@ struct HabitsCard: View {
                 Button(action: { state.toggleHabitCell(at: idx) }) {
                     if val == 0 {
                         Circle()
-                            .fill(Color.white.opacity(0.05))
+                            .fill(SideDeckTheme.primaryText.opacity(0.05))
                             .frame(width: 6.3, height: 6.3)
-                            .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.6))
+                            .overlay(Circle().stroke(SideDeckTheme.primaryText.opacity(0.3), lineWidth: 0.6))
                     } else if val == 1 {
-                        Circle().fill(Color.white.opacity(0.35)).frame(width: 6.3, height: 6.3)
+                        Circle().fill(SideDeckTheme.primaryText.opacity(0.35)).frame(width: 6.3, height: 6.3)
                     } else if val == 2 {
                         Circle().fill(Color(hex: 0xa1a1a1)).frame(width: 6.3, height: 6.3)
                     } else if val == 3 {
-                        Circle().fill(Color.white.opacity(0.75)).frame(width: 6.3, height: 6.3)
+                        Circle().fill(SideDeckTheme.primaryText.opacity(0.75)).frame(width: 6.3, height: 6.3)
                     } else {
-                        Circle().fill(Color.white).frame(width: 6.3, height: 6.3)
+                        Circle().fill(SideDeckTheme.primaryText).frame(width: 6.3, height: 6.3)
                     }
                 }
                 .buttonStyle(.plain)
@@ -1375,7 +1391,7 @@ struct HydrationCard: View {
             VStack {
                 Text(countdownString)
                     .font(.system(size: 14.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                     .padding(.top, 10)
                 Spacer()
             }
@@ -1426,14 +1442,14 @@ struct NotesCard: View {
             HStack {
                 Text("Notes")
                     .font(.system(size: 6.8, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Spacer()
             }
             .padding(.horizontal, 8)
             .frame(width: 65.8, height: 13.8)
             .background(
                 LinearGradient(
-                    colors: [Color.black, Color(hex: 0x2f2f2f)],
+                    colors: [SideDeckTheme.canvas, Color(hex: 0x2f2f2f)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -1445,29 +1461,19 @@ struct NotesCard: View {
             VStack(spacing: 2) {
                 ForEach(Array(state.noteLines.prefix(3))) { item in
                     HStack(spacing: 4) {
-                        Button(action: { state.toggleNote(item) }) {
-                            ZStack {
-                                Circle()
-                                    .fill(item.isDone ? SideDeckTheme.accent : Color.clear)
-                                    .overlay(Circle().stroke(item.isDone ? SideDeckTheme.accent : SideDeckTheme.secondaryText, lineWidth: 1))
-                                if item.isDone {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 5.5, weight: .bold))
-                                        .foregroundColor(.white)
-                                }
-                            }
-                            .frame(width: 10, height: 10)
-                            .contentShape(Rectangle())
+                        CompletionToggle(
+                            label: item.text,
+                            isCompleted: item.isDone,
+                            size: .compact
+                        ) {
+                            state.toggleNote(item)
                         }
-                        .buttonStyle(.plain)
-                        .frame(width: 18, height: 14)
-                        .accessibilityLabel(item.text)
-                        .accessibilityValue(item.isDone ? "Completed" : "Not completed")
+                        .frame(height: 14)
 
                         Text(item.text)
                             .font(.system(size: 6.8, weight: .regular))
                             .strikethrough(item.isDone)
-                            .foregroundColor(item.isDone ? Color.white.opacity(0.4) : Color.white.opacity(0.8))
+                            .foregroundColor(item.isDone ? SideDeckTheme.primaryText.opacity(0.4) : SideDeckTheme.primaryText.opacity(0.8))
                             .lineLimit(1)
                         Spacer()
                     }
@@ -1476,7 +1482,7 @@ struct NotesCard: View {
 
                     if item.id != state.noteLines.prefix(3).last?.id {
                         Divider()
-                            .background(Color.white.opacity(0.09))
+                            .background(SideDeckTheme.primaryText.opacity(0.09))
                             .padding(.horizontal, 6)
                     }
                 }
@@ -1521,7 +1527,7 @@ struct SettingsHandle: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(Color(hex: 0x9299A6))
                 .frame(width: 22, height: 22)
-                .background(Color.white.opacity(0.055))
+                .background(SideDeckTheme.primaryText.opacity(0.055))
                 .clipShape(RoundedRectangle(cornerRadius: SideDeckTheme.Radius.compact, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -1545,30 +1551,30 @@ struct FocusFlyout: View {
             HStack {
                 Text("Tasks")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Text("\(pendingCount) to go")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.55))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                 Spacer()
 
                 // Quick timer preset pills
                 HStack(spacing: 4) {
                     Button(action: { state.resetFocusTimer(to: 25) }) {
                         Text("25m").font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(Color.white.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
+                            .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(SideDeckTheme.primaryText.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
                     }.buttonStyle(.plain)
 
                     Button(action: { state.resetFocusTimer(to: 15) }) {
                         Text("15m").font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(Color.white.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
+                            .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(SideDeckTheme.primaryText.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
                     }.buttonStyle(.plain)
 
                     Button(action: { state.resetFocusTimer(to: 5) }) {
                         Text("5m").font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(Color.white.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
+                            .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(SideDeckTheme.primaryText.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
                     }.buttonStyle(.plain)
                 }
             }
@@ -1577,27 +1583,18 @@ struct FocusFlyout: View {
             VStack(spacing: 5) {
                 ForEach(state.subtasks) { item in
                     HStack(spacing: 10) {
-                        Button(action: { state.toggleTask(item) }) {
-                            ZStack {
-                                Circle()
-                                    .stroke(Color.white.opacity(0.4), lineWidth: 1.2)
-                                    .frame(width: 16, height: 16)
-                                if item.isDone {
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 16, height: 16)
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.black)
-                                }
-                            }
+                        CompletionToggle(
+                            label: item.text,
+                            isCompleted: item.isDone,
+                            size: .regular
+                        ) {
+                            state.toggleTask(item)
                         }
-                        .buttonStyle(.plain)
 
                         Text(item.text)
                             .font(.system(size: 13, weight: .regular))
                             .strikethrough(item.isDone)
-                            .foregroundColor(item.isDone ? Color.white.opacity(0.4) : .white)
+                            .foregroundColor(item.isDone ? SideDeckTheme.primaryText.opacity(0.4) : .white)
                             .lineLimit(1)
                             .onTapGesture {
                                 state.selectActiveTask(item)
@@ -1608,13 +1605,13 @@ struct FocusFlyout: View {
                         if let tag = item.tag, !item.isDone {
                             Text(tag)
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundColor(Color.white.opacity(0.55))
+                                .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                         }
 
                         Button(action: { state.deleteTask(item) }) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 10))
-                                .foregroundColor(Color.white.opacity(0.35))
+                                .foregroundColor(SideDeckTheme.primaryText.opacity(0.35))
                         }
                         .buttonStyle(.plain)
                     }
@@ -1622,11 +1619,11 @@ struct FocusFlyout: View {
                     .frame(height: 38)
                     .background(
                         RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                            .fill(item.text == state.taskName ? Color(hex: 0x1c79ff, alpha: 0.14) : Color.white.opacity(0.07))
+                            .fill(item.text == state.taskName ? SideDeckTheme.accent.opacity(0.14) : SideDeckTheme.primaryText.opacity(0.07))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                            .stroke(item.text == state.taskName ? Color(hex: 0x1c79ff, alpha: 0.8) : Color.clear, lineWidth: 1)
+                            .stroke(item.text == state.taskName ? SideDeckTheme.accent.opacity(0.8) : Color.clear, lineWidth: 1)
                     )
                 }
             }
@@ -1637,7 +1634,7 @@ struct FocusFlyout: View {
                 Button(action: { state.clearDoneTasks() }) {
                     Text("Clear \(state.subtasks.filter { $0.isDone }.count) done")
                         .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(Color.white.opacity(0.55))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                 }
                 .buttonStyle(.plain)
             }
@@ -1647,14 +1644,14 @@ struct FocusFlyout: View {
                 TextField("Add a task…", text: $state.newTaskInput)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                     .focused($isInputFocused)
                     .onSubmit {
                         state.addTask()
                     }
                     .padding(.horizontal, 14)
                     .frame(height: 36)
-                    .background(Color.white.opacity(0.08))
+                    .background(SideDeckTheme.primaryText.opacity(0.08))
                     .cornerRadius(SideDeckTheme.Radius.pill)
 
                 Button(action: {
@@ -1663,7 +1660,7 @@ struct FocusFlyout: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: 0x0068fe), Color(hex: 0x1c79ff)],
+                                colors: [SideDeckTheme.accent.opacity(0.88), SideDeckTheme.accent],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -1672,7 +1669,7 @@ struct FocusFlyout: View {
                         .overlay(
                             Image(systemName: "plus")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(SideDeckTheme.primaryText)
                         )
                 }
                 .buttonStyle(.plain)
@@ -1714,11 +1711,11 @@ struct ClockFlyout: View {
             HStack {
                 Text("Digital clock")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Spacer()
                 Text(TimeZone.current.abbreviation() ?? "IST")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.55))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
             }
 
             // Hero Box
@@ -1726,31 +1723,31 @@ struct ClockFlyout: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(timeFormatted)
                         .font(.system(size: 24, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                     if !state.is24Hour {
                         Text(meridiemFormatted)
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color.white.opacity(0.6))
+                            .foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                     }
                 }
                 Text("\(fullDateFormatted) · Week \(weekOfYear)")
                     .font(.system(size: 11.5, weight: .regular))
-                    .foregroundColor(Color.white.opacity(0.55))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(hex: 0x1c79ff, alpha: 0.14))
+            .background(SideDeckTheme.accent.opacity(0.14))
             .cornerRadius(SideDeckTheme.Radius.control)
             .overlay(
                 RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                    .stroke(Color(hex: 0x1c79ff, alpha: 0.8), lineWidth: 1)
+                    .stroke(SideDeckTheme.accent.opacity(0.8), lineWidth: 1)
             )
 
             // Interactive Hours Selector
             HStack {
                 Text("Hours")
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Spacer()
                 HStack(spacing: 3) {
                     Button(action: {
@@ -1760,9 +1757,9 @@ struct ClockFlyout: View {
                     }) {
                         Text("System")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 0 ? .white : Color.white.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 0 ? .white : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(state.hourModeIndex == 0 ? Color(hex: 0x1c79ff) : Color.clear)
+                            .background(state.hourModeIndex == 0 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
                     }.buttonStyle(.plain)
 
@@ -1773,9 +1770,9 @@ struct ClockFlyout: View {
                     }) {
                         Text("12-hour")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 1 ? .white : Color.white.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 1 ? .white : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(state.hourModeIndex == 1 ? Color(hex: 0x1c79ff) : Color.clear)
+                            .background(state.hourModeIndex == 1 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
                     }.buttonStyle(.plain)
 
@@ -1786,26 +1783,26 @@ struct ClockFlyout: View {
                     }) {
                         Text("24-hour")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 2 ? .white : Color.white.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 2 ? .white : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(state.hourModeIndex == 2 ? Color(hex: 0x1c79ff) : Color.clear)
+                            .background(state.hourModeIndex == 2 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
                     }.buttonStyle(.plain)
                 }
                 .padding(3)
-                .background(Color.black.opacity(0.45))
+                .background(SideDeckTheme.canvas.opacity(0.45))
                 .cornerRadius(SideDeckTheme.Radius.medium)
             }
             .padding(.horizontal, 12)
             .frame(height: 38)
-            .background(Color.white.opacity(0.07))
+            .background(SideDeckTheme.primaryText.opacity(0.07))
             .cornerRadius(SideDeckTheme.Radius.control)
 
             // Interactive Card Options (Seconds & Date)
             HStack {
                 Text("On the card")
                     .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Spacer()
                 HStack(spacing: 4) {
                     Button(action: {
@@ -1814,10 +1811,10 @@ struct ClockFlyout: View {
                     }) {
                         Text("Seconds")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.showSeconds ? .white : Color.white.opacity(0.55))
+                            .foregroundColor(state.showSeconds ? .white : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(state.showSeconds ? Color(hex: 0x1c79ff) : Color.clear)
+                            .background(state.showSeconds ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
                     }
                     .buttonStyle(.plain)
@@ -1828,21 +1825,21 @@ struct ClockFlyout: View {
                     }) {
                         Text("Date")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.showDateOnCard ? .white : Color.white.opacity(0.55))
+                            .foregroundColor(state.showDateOnCard ? .white : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(state.showDateOnCard ? Color(hex: 0x1c79ff) : Color.clear)
+                            .background(state.showDateOnCard ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(3)
-                .background(Color.black.opacity(0.45))
+                .background(SideDeckTheme.canvas.opacity(0.45))
                 .cornerRadius(SideDeckTheme.Radius.medium)
             }
             .padding(.horizontal, 12)
             .frame(height: 38)
-            .background(Color.white.opacity(0.07))
+            .background(SideDeckTheme.primaryText.opacity(0.07))
             .cornerRadius(SideDeckTheme.Radius.control)
         }
     }
@@ -1872,11 +1869,11 @@ struct StatusFlyout: View {
             HStack {
                 Text("Battery")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Spacer()
                 Text(state.isCharging ? "Charging" : "On battery")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.55))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
             }
 
             // Battery Hero
@@ -1884,43 +1881,43 @@ struct StatusFlyout: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(state.batteryLevel)%")
                         .font(.system(size: 22, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                     Text(timeRemainingText)
                         .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                 }
                 Spacer()
                 // Battery outline icon with dynamic fill
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: SideDeckTheme.Radius.indicator)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                        .stroke(SideDeckTheme.primaryText.opacity(0.5), lineWidth: 1)
                         .frame(width: 32, height: 16)
                     RoundedRectangle(cornerRadius: SideDeckTheme.Radius.batteryFill)
-                        .fill(state.isCharging ? Color.green : Color.white)
+                        .fill(state.isCharging ? Color.green : SideDeckTheme.primaryText)
                         .frame(width: 32 * CGFloat(state.batteryLevel) / 100.0 * 0.9, height: 12)
                         .padding(.leading, 2)
                 }
             }
             .padding(12)
-            .background(Color(hex: 0x1c79ff, alpha: 0.14))
+            .background(SideDeckTheme.accent.opacity(0.14))
             .cornerRadius(SideDeckTheme.Radius.control)
             .overlay(
                 RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                    .stroke(Color(hex: 0x1c79ff, alpha: 0.8), lineWidth: 1)
+                    .stroke(SideDeckTheme.accent.opacity(0.8), lineWidth: 1)
             )
 
             // Wi-Fi Subhead & Toggle
             HStack {
                 Text("Wi‑Fi")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Spacer()
                 Button(action: { state.toggleWifiPower() }) {
                     Text(state.isWifiOn ? "On" : "Off")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(state.isWifiOn ? .white : Color.white.opacity(0.5))
+                        .foregroundColor(state.isWifiOn ? .white : SideDeckTheme.primaryText.opacity(0.5))
                         .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(state.isWifiOn ? Color(hex: 0x1c79ff) : Color.white.opacity(0.1))
+                        .background(state.isWifiOn ? SideDeckTheme.accent : SideDeckTheme.primaryText.opacity(0.1))
                         .cornerRadius(SideDeckTheme.Radius.button)
                 }
                 .buttonStyle(.plain)
@@ -1934,15 +1931,15 @@ struct StatusFlyout: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(state.wifiNetwork)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                     Text("Signal: \(state.wifiRSSI) dBm · \(state.isWifiOn ? "Active" : "Disconnected")")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                 }
                 Spacer()
             }
             .padding(12)
-            .background(Color.white.opacity(0.07))
+            .background(SideDeckTheme.primaryText.opacity(0.07))
             .cornerRadius(SideDeckTheme.Radius.control)
 
             // Networks list
@@ -1952,22 +1949,22 @@ struct StatusFlyout: View {
                         WifiIconGlyph().frame(width: 14, height: 12)
                         Text(net.name)
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundColor(.white)
+                            .foregroundColor(SideDeckTheme.primaryText)
                         Spacer()
                         if net.current {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(Color(hex: 0x1c79ff))
+                                .foregroundColor(SideDeckTheme.accent)
                         }
                         if net.locked {
                             Image(systemName: "lock.fill")
                                 .font(.system(size: 10))
-                                .foregroundColor(Color.white.opacity(0.4))
+                                .foregroundColor(SideDeckTheme.primaryText.opacity(0.4))
                         }
                     }
                     .padding(.horizontal, 12)
                     .frame(height: 34)
-                    .background(net.current ? Color(hex: 0x1c79ff, alpha: 0.14) : Color.white.opacity(0.04))
+                    .background(net.current ? SideDeckTheme.accent.opacity(0.14) : SideDeckTheme.primaryText.opacity(0.04))
                     .cornerRadius(SideDeckTheme.Radius.field)
                 }
             }
@@ -1980,7 +1977,7 @@ struct StatusFlyout: View {
                 }) {
                     Text("Wi‑Fi Settings…")
                         .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(Color.white.opacity(0.55))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                 }
                 .buttonStyle(.plain)
             }
@@ -1999,17 +1996,17 @@ struct HabitsFlyout: View {
             HStack {
                 Text("Habits")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Text("\(state.habitStreak) day streak")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.55))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                 Spacer()
                 Button(action: { state.checkInToday() }) {
                     Text("Check in Today")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                         .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(Color(hex: 0x1c79ff))
+                        .background(SideDeckTheme.accent)
                         .cornerRadius(SideDeckTheme.Radius.button)
                 }
                 .buttonStyle(.plain)
@@ -2020,36 +2017,36 @@ struct HabitsFlyout: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Today's Check-ins")
                         .font(.system(size: 12, weight: .regular))
-                        .foregroundColor(Color.white.opacity(0.6))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                     Text("\(state.habitTodayCount)")
                         .font(.system(size: 24, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                 }
                 Spacer()
                 HStack(spacing: 4) {
-                    Text("Less").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
-                    Circle().fill(Color.white.opacity(0.05)).frame(width: 7, height: 7)
-                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 0.5))
-                    Circle().fill(Color.white.opacity(0.35)).frame(width: 7, height: 7)
+                    Text("Less").font(.system(size: 10)).foregroundColor(SideDeckTheme.primaryText.opacity(0.45))
+                    Circle().fill(SideDeckTheme.primaryText.opacity(0.05)).frame(width: 7, height: 7)
+                        .overlay(Circle().stroke(SideDeckTheme.primaryText.opacity(0.3), lineWidth: 0.5))
+                    Circle().fill(SideDeckTheme.primaryText.opacity(0.35)).frame(width: 7, height: 7)
                     Circle().fill(Color(hex: 0xa1a1a1)).frame(width: 7, height: 7)
-                    Circle().fill(Color.white.opacity(0.75)).frame(width: 7, height: 7)
-                    Circle().fill(Color.white).frame(width: 7, height: 7)
-                    Text("More").font(.system(size: 10)).foregroundColor(Color.white.opacity(0.45))
+                    Circle().fill(SideDeckTheme.primaryText.opacity(0.75)).frame(width: 7, height: 7)
+                    Circle().fill(SideDeckTheme.primaryText).frame(width: 7, height: 7)
+                    Text("More").font(.system(size: 10)).foregroundColor(SideDeckTheme.primaryText.opacity(0.45))
                 }
             }
             .padding(12)
-            .background(Color(hex: 0x1c79ff, alpha: 0.14))
+            .background(SideDeckTheme.accent.opacity(0.14))
             .cornerRadius(SideDeckTheme.Radius.control)
             .overlay(
                 RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                    .stroke(Color(hex: 0x1c79ff, alpha: 0.8), lineWidth: 1)
+                    .stroke(SideDeckTheme.accent.opacity(0.8), lineWidth: 1)
             )
 
             // 52-week interactive activity dot matrix
             VStack(alignment: .leading, spacing: 4) {
                 Text("Annual History (Click any dot to log)")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color.white.opacity(0.45))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.45))
 
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.fixed(7), spacing: 3), count: 28),
@@ -2060,17 +2057,17 @@ struct HabitsFlyout: View {
                         Button(action: { state.toggleAnnualHabitCell(at: idx) }) {
                             if lvl == 0 {
                                 RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell)
-                                    .fill(Color.white.opacity(0.05))
+                                    .fill(SideDeckTheme.primaryText.opacity(0.05))
                                     .frame(width: 7, height: 7)
-                                    .overlay(RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).stroke(Color.white.opacity(0.2), lineWidth: 0.4))
+                                    .overlay(RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).stroke(SideDeckTheme.primaryText.opacity(0.2), lineWidth: 0.4))
                             } else if lvl == 1 {
-                                RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).fill(Color.white.opacity(0.35)).frame(width: 7, height: 7)
+                                RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).fill(SideDeckTheme.primaryText.opacity(0.35)).frame(width: 7, height: 7)
                             } else if lvl == 2 {
                                 RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).fill(Color(hex: 0xa1a1a1)).frame(width: 7, height: 7)
                             } else if lvl == 3 {
-                                RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).fill(Color.white.opacity(0.75)).frame(width: 7, height: 7)
+                                RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).fill(SideDeckTheme.primaryText.opacity(0.75)).frame(width: 7, height: 7)
                             } else {
-                                RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).fill(Color.white).frame(width: 7, height: 7)
+                                RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell).fill(SideDeckTheme.primaryText).frame(width: 7, height: 7)
                             }
                         }
                         .buttonStyle(.plain)
@@ -2078,31 +2075,31 @@ struct HabitsFlyout: View {
                 }
             }
             .padding(8)
-            .background(Color.white.opacity(0.04))
+            .background(SideDeckTheme.primaryText.opacity(0.04))
             .cornerRadius(SideDeckTheme.Radius.field)
 
             Text("Tasks completed today")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color.white.opacity(0.55))
+                .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
 
             VStack(spacing: 4) {
                 let doneTasks = state.subtasks.filter { $0.isDone }
                 if doneTasks.isEmpty {
                     Text("No tasks completed yet. Check off a task to log it!")
                         .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.35))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.35))
                         .padding(8)
                 } else {
                     ForEach(doneTasks) { t in
                         HStack(spacing: 8) {
-                            Circle().fill(Color.white).frame(width: 14, height: 14)
-                                .overlay(Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundColor(.black))
-                            Text(t.text).font(.system(size: 12)).strikethrough().foregroundColor(Color.white.opacity(0.5))
+                            Circle().fill(SideDeckTheme.accent).frame(width: 14, height: 14)
+                                .overlay(Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundColor(SideDeckTheme.primaryText))
+                            Text(t.text).font(.system(size: 12)).strikethrough().foregroundColor(SideDeckTheme.secondaryText)
                             Spacer()
                         }
                         .padding(.horizontal, 10)
                         .frame(height: 30)
-                        .background(Color.white.opacity(0.05))
+                        .background(SideDeckTheme.primaryText.opacity(0.05))
                         .cornerRadius(SideDeckTheme.Radius.micro)
                     }
                 }
@@ -2128,10 +2125,10 @@ struct HydrationFlyout: View {
                 HStack {
                     Text("Hydration")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                     Text("\(state.waterMl) / \(state.waterGoalMl) ml")
                         .font(.system(size: 11, weight: .regular, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.55))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                     Spacer()
                 }
 
@@ -2140,10 +2137,10 @@ struct HydrationFlyout: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Next reminder in")
                             .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(Color.white.opacity(0.6))
+                            .foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                         Text(countdownString)
                             .font(.system(size: 22, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundColor(SideDeckTheme.primaryText)
                     }
                     Spacer()
                     Button(action: { state.addDrink(amount: 250) }) {
@@ -2153,12 +2150,12 @@ struct HydrationFlyout: View {
                             Text("+250ml")
                                 .font(.system(size: 12, weight: .semibold))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(SideDeckTheme.primaryText)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
                             LinearGradient(
-                                colors: [Color(hex: 0x0068fe), Color(hex: 0x1c79ff)],
+                                colors: [SideDeckTheme.accent.opacity(0.88), SideDeckTheme.accent],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -2168,32 +2165,32 @@ struct HydrationFlyout: View {
                     .buttonStyle(.plain)
                 }
                 .padding(12)
-                .background(Color(hex: 0x1c79ff, alpha: 0.14))
+                .background(SideDeckTheme.accent.opacity(0.14))
                 .cornerRadius(SideDeckTheme.Radius.control)
                 .overlay(
                     RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                        .stroke(Color(hex: 0x1c79ff, alpha: 0.8), lineWidth: 1)
+                        .stroke(SideDeckTheme.accent.opacity(0.8), lineWidth: 1)
                 )
 
                 // Quick log presets
                 HStack(spacing: 6) {
                     Button(action: { state.addDrink(amount: 150) }) {
                         Text("+150ml").font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(Color.white.opacity(0.08)).cornerRadius(SideDeckTheme.Radius.field)
+                            .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(SideDeckTheme.primaryText.opacity(0.08)).cornerRadius(SideDeckTheme.Radius.field)
                     }.buttonStyle(.plain)
 
                     Button(action: { state.addDrink(amount: 500) }) {
                         Text("+500ml").font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 5)
-                            .background(Color.white.opacity(0.08)).cornerRadius(SideDeckTheme.Radius.field)
+                            .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 8).padding(.vertical, 5)
+                            .background(SideDeckTheme.primaryText.opacity(0.08)).cornerRadius(SideDeckTheme.Radius.field)
                     }.buttonStyle(.plain)
 
                     Spacer()
 
                     Button(action: { state.resetWater() }) {
                         Text("Reset").font(.system(size: 11, weight: .regular))
-                            .foregroundColor(Color.white.opacity(0.4)).padding(.horizontal, 8).padding(.vertical, 5)
+                            .foregroundColor(SideDeckTheme.primaryText.opacity(0.4)).padding(.horizontal, 8).padding(.vertical, 5)
                     }.buttonStyle(.plain)
                 }
             }
@@ -2201,19 +2198,19 @@ struct HydrationFlyout: View {
 
             // Vertical Divider
             Rectangle()
-                .fill(Color.white.opacity(0.12))
+                .fill(SideDeckTheme.primaryText.opacity(0.12))
                 .frame(width: 1)
 
             // Aside: Real 14-day Drinks Chart
             VStack(alignment: .leading, spacing: 8) {
                 Text("Last 14 days")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
 
                 HStack {
-                    Text("Today").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Today").font(.system(size: 11)).foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                     Spacer()
-                    Text("\(state.drinkHistory.last ?? 0) drinks").font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundColor(.white)
+                    Text("\(state.drinkHistory.last ?? 0) drinks").font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundColor(SideDeckTheme.primaryText)
                 }
 
                 // Dynamic Bar Chart
@@ -2221,23 +2218,23 @@ struct HydrationFlyout: View {
                     ForEach(state.drinkHistory.indices, id: \.self) { idx in
                         let val = state.drinkHistory[idx]
                         RoundedRectangle(cornerRadius: SideDeckTheme.Radius.heatmapCell)
-                            .fill(idx == state.drinkHistory.count - 1 ? Color(hex: 0x00e1ff) : Color(hex: 0x1c79ff))
+                            .fill(idx == state.drinkHistory.count - 1 ? Color(hex: 0x00e1ff) : SideDeckTheme.accent)
                             .frame(width: 6, height: CGFloat(max(4, val * 4)))
                     }
                 }
                 .frame(height: 36)
 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(SideDeckTheme.primaryText.opacity(0.1))
 
                 HStack {
-                    Text("Streak").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Streak").font(.system(size: 11)).foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                     Spacer()
-                    Text("7 days").font(.system(size: 11, weight: .bold)).foregroundColor(Color(hex: 0x1c79ff))
+                    Text("7 days").font(.system(size: 11, weight: .bold)).foregroundColor(SideDeckTheme.accent)
                 }
                 HStack {
-                    Text("Average").font(.system(size: 11)).foregroundColor(Color.white.opacity(0.6))
+                    Text("Average").font(.system(size: 11)).foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                     Spacer()
-                    Text("4.6 a day").font(.system(size: 11)).foregroundColor(.white)
+                    Text("4.6 a day").font(.system(size: 11)).foregroundColor(SideDeckTheme.primaryText)
                 }
             }
             .frame(width: 140)
@@ -2256,10 +2253,10 @@ struct NotesFlyout: View {
             HStack {
                 Text("Notes")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                 Text("\(state.noteLines.count)")
                     .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.55))
+                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.55))
                 Spacer()
             }
 
@@ -2268,51 +2265,41 @@ struct NotesFlyout: View {
                 if state.noteLines.isEmpty {
                     Text("No notes yet. Type something below to save a quick thought.")
                         .font(.system(size: 11))
-                        .foregroundColor(Color.white.opacity(0.35))
+                        .foregroundColor(SideDeckTheme.primaryText.opacity(0.35))
                         .padding(10)
                 } else {
                     ForEach(state.noteLines) { item in
                         HStack(spacing: 10) {
-                            Button(action: { state.toggleNote(item) }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(item.isDone ? SideDeckTheme.accent : Color.clear)
-                                        .overlay(Circle().stroke(item.isDone ? SideDeckTheme.accent : SideDeckTheme.secondaryText, lineWidth: 1.2))
-                                    if item.isDone {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 8, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                                .frame(width: 16, height: 16)
+                            CompletionToggle(
+                                label: item.text,
+                                isCompleted: item.isDone,
+                                size: .regular
+                            ) {
+                                state.toggleNote(item)
                             }
-                            .buttonStyle(.plain)
-                            .frame(width: 24, height: 24)
-                            .accessibilityLabel(item.text)
-                            .accessibilityValue(item.isDone ? "Completed" : "Not completed")
 
                             Text(item.text)
                                 .font(.system(size: 13, weight: .regular))
                                 .strikethrough(item.isDone)
-                                .foregroundColor(item.isDone ? Color.white.opacity(0.4) : .white)
+                                .foregroundColor(item.isDone ? SideDeckTheme.primaryText.opacity(0.4) : .white)
                                 .lineLimit(1)
 
                             Spacer()
 
                             Text(item.timeAgoString)
                                 .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                .foregroundColor(Color.white.opacity(0.45))
+                                .foregroundColor(SideDeckTheme.primaryText.opacity(0.45))
 
                             Button(action: { state.deleteNote(item) }) {
                                 Image(systemName: "trash")
                                     .font(.system(size: 10))
-                                    .foregroundColor(Color.white.opacity(0.35))
+                                    .foregroundColor(SideDeckTheme.primaryText.opacity(0.35))
                             }
                             .buttonStyle(.plain)
                         }
                         .padding(.horizontal, 12)
                         .frame(height: 36)
-                        .background(Color.white.opacity(0.07))
+                        .background(SideDeckTheme.primaryText.opacity(0.07))
                         .cornerRadius(SideDeckTheme.Radius.field)
                     }
                 }
@@ -2323,14 +2310,14 @@ struct NotesFlyout: View {
                 TextField("Jot something down…", text: $state.newNoteInput)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
-                    .foregroundColor(.white)
+                    .foregroundColor(SideDeckTheme.primaryText)
                     .focused($isInputFocused)
                     .onSubmit {
                         state.addNote()
                     }
                     .padding(.horizontal, 14)
                     .frame(height: 36)
-                    .background(Color.white.opacity(0.08))
+                    .background(SideDeckTheme.primaryText.opacity(0.08))
                     .cornerRadius(SideDeckTheme.Radius.pill)
 
                 Button(action: {
@@ -2339,7 +2326,7 @@ struct NotesFlyout: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: 0x0068fe), Color(hex: 0x1c79ff)],
+                                colors: [SideDeckTheme.accent.opacity(0.88), SideDeckTheme.accent],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -2348,7 +2335,7 @@ struct NotesFlyout: View {
                         .overlay(
                             Image(systemName: "plus")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundColor(SideDeckTheme.primaryText)
                         )
                 }
                 .buttonStyle(.plain)

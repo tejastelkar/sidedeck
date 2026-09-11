@@ -56,6 +56,7 @@ struct SideDeckThemeContainer<Content: View>: View {
                 \.sideDeckTheme,
                 ResolvedSideDeckTheme(scheme: resolved, accentChoice: store.preferences.accent)
             )
+            .tint(ResolvedSideDeckTheme(scheme: resolved, accentChoice: store.preferences.accent).accent)
             .preferredColorScheme(mode == .system ? nil : resolved)
     }
 }
