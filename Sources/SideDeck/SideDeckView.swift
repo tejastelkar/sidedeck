@@ -346,7 +346,6 @@ class SideDeckHoverState: ObservableObject {
     func hoverFlyout() {
         collapseWorkItem?.cancel()
         collapseWorkItem = nil
-        isSettingsOpen = false
         isHoveringFlyout = true
     }
 

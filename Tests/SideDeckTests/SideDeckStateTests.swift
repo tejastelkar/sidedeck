@@ -216,6 +216,16 @@ final class SideDeckHoverStateTests: XCTestCase {
         XCTAssertFalse(state.isSettingsOpen)
         XCTAssertEqual(state.activeWidget, .notes)
     }
+
+    func testEnteringSettingsFlyoutDoesNotCloseSettings() {
+        let state = SideDeckHoverState()
+        state.toggleSettings()
+
+        state.hoverFlyout()
+
+        XCTAssertTrue(state.isSettingsOpen)
+        XCTAssertTrue(state.isHoveringFlyout)
+    }
 }
 
 final class SideDeckLayoutTests: XCTestCase {

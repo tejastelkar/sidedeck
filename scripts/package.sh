@@ -12,7 +12,7 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 INSTALL_APP=false
 CREATE_DMG=true
 APP_VERSION="1.2.0"
-APP_BUILD="5"
+APP_BUILD="6"
 
 for arg in "$@"; do
   case "$arg" in
