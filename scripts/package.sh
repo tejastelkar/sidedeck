@@ -11,8 +11,8 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 INSTALL_APP=false
 CREATE_DMG=true
-APP_VERSION="1.1.1"
-APP_BUILD="3"
+APP_VERSION="1.2.0"
+APP_BUILD="4"
 
 for arg in "$@"; do
   case "$arg" in
@@ -78,6 +78,8 @@ cat << PLIST > "$CONTENTS_DIR/Info.plist"
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>SideDeck uses Location permission only to display the name of the Wi-Fi network your Mac is currently connected to.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Tejas Telkar. All rights reserved.</string>
 </dict>

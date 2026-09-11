@@ -76,10 +76,64 @@ final class SideDeckStateTests: XCTestCase {
         XCTAssertEqual(state.habitTodayCount, 1)
         XCTAssertEqual(state.habitStreak, 1)
     }
+
+    func testFreshHabitHistoryStartsEmpty() {
+        let state = SideDeckState(defaults: defaults, startServices: false)
+
+        XCTAssertEqual(state.habitMatrix, Array(repeating: 0, count: 36))
+        XCTAssertEqual(state.annualHabitMatrix, Array(repeating: 0, count: 140))
+        XCTAssertEqual(state.habitTodayCount, 0)
+        XCTAssertEqual(state.habitStreak, 0)
+    }
+
+    func testLegacyDemoHistoryMigratesToOneRealCheckInOnlyOnce() {
+        defaults.set(Array(repeating: 4, count: 36), forKey: "sidedeck_habits")
+        defaults.set(Array(repeating: 3, count: 140), forKey: "sidedeck_annual_habits")
+        defaults.set(8, forKey: "sidedeck_habit_today_count")
+        defaults.set(12, forKey: "sidedeck_habit_streak")
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let migrated = SideDeckState(defaults: defaults, startServices: false, now: now)
+
+        XCTAssertEqual(migrated.habitMatrix.filter { $0 > 0 }.count, 1)
+        XCTAssertEqual(migrated.habitMatrix.last, 1)
+        XCTAssertEqual(migrated.annualHabitMatrix.filter { $0 > 0 }.count, 1)
+        XCTAssertEqual(migrated.annualHabitMatrix.last, 1)
+        XCTAssertEqual(migrated.habitTodayCount, 1)
+        XCTAssertEqual(migrated.habitStreak, 1)
+
+        migrated.toggleAnnualHabitCell(at: 0)
+        let reloaded = SideDeckState(defaults: defaults, startServices: false, now: now)
+        XCTAssertEqual(reloaded.annualHabitMatrix[0], 1)
+    }
+
+    func testResetHabitHistoryClearsAllCountersAndPersists() {
+        let state = SideDeckState(defaults: defaults, startServices: false)
+        state.checkInToday(on: Date(timeIntervalSince1970: 1_800_000_000))
+
+        state.resetHabitHistory()
+        let reloaded = SideDeckState(defaults: defaults, startServices: false)
+
+        XCTAssertEqual(reloaded.habitTodayCount, 0)
+        XCTAssertEqual(reloaded.habitStreak, 0)
+        XCTAssertTrue(reloaded.habitMatrix.allSatisfy { $0 == 0 })
+        XCTAssertTrue(reloaded.annualHabitMatrix.allSatisfy { $0 == 0 })
+    }
 }
 
 @MainActor
 final class SideDeckHoverStateTests: XCTestCase {
+    func testRepeatedHoverDoesNotCreateExtraStateTransitions() {
+        let state = SideDeckHoverState()
+
+        state.hoverCard(.focus)
+        let transitions = state.transitionCount
+        state.hoverCard(.focus)
+
+        XCTAssertEqual(state.transitionCount, transitions)
+        XCTAssertEqual(state.activeWidget, .focus)
+    }
+
     func testLateExitFromPreviousCardDoesNotCollapseNewCard() async throws {
         let state = SideDeckHoverState()
         state.hoverCard(.focus)
@@ -149,9 +203,35 @@ final class SideDeckHoverStateTests: XCTestCase {
 
         XCTAssertEqual(state.activeWidget, .habits)
     }
+
+    func testSettingsAndWidgetFlyoutsAreMutuallyExclusive() {
+        let state = SideDeckHoverState()
+
+        state.toggleSettings()
+        XCTAssertTrue(state.isSettingsOpen)
+        XCTAssertNil(state.activeWidget)
+
+        state.toggleCard(.notes)
+        XCTAssertFalse(state.isSettingsOpen)
+        XCTAssertEqual(state.activeWidget, .notes)
+    }
 }
 
 final class SideDeckLayoutTests: XCTestCase {
+    func testFlyoutAnchorFollowsVisibleWidgetOrder() {
+        let layout = SideDeckLayout.preferred
+        let visible: Set<DockWidgetType> = [.battery, .notes]
+
+        XCTAssertLessThan(
+            layout.dockCardCenterY(for: .battery, visibleWidgets: visible, spacing: 4.2),
+            layout.dockCardCenterY(for: .notes, visibleWidgets: visible, spacing: 4.2)
+        )
+        XCTAssertEqual(
+            layout.dockCardCenterY(for: .battery, visibleWidgets: visible, spacing: 4.2),
+            SideDeckLayout.dockTopInset + SideDeckLayout.dockPadding + 55.4 / 2,
+            accuracy: 0.01
+        )
+    }
     func testWideFlyoutFitsInsidePanelOnBothDockEdges() {
         let layout = SideDeckLayout(availableSize: CGSize(width: 1_000, height: 900))
         let bounds = CGRect(origin: .zero, size: layout.panelSize)

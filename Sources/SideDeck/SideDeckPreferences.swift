@@ -7,6 +7,7 @@ enum AppearanceMode: String, Codable, CaseIterable, Identifiable {
     case light
 
     var id: String { rawValue }
+    var title: String { rawValue.capitalized }
 
     func resolved(system: ColorScheme) -> ColorScheme {
         switch self {
@@ -25,6 +26,7 @@ enum AccentChoice: String, Codable, CaseIterable, Identifiable {
     case orange
 
     var id: String { rawValue }
+    var title: String { rawValue.capitalized }
 }
 
 enum DockDensity: String, Codable, CaseIterable, Identifiable {
@@ -32,6 +34,7 @@ enum DockDensity: String, Codable, CaseIterable, Identifiable {
     case comfortable
 
     var id: String { rawValue }
+    var title: String { rawValue.capitalized }
 }
 
 enum CollapseSpeed: String, Codable, CaseIterable, Identifiable {
@@ -40,6 +43,7 @@ enum CollapseSpeed: String, Codable, CaseIterable, Identifiable {
     case relaxed
 
     var id: String { rawValue }
+    var title: String { rawValue.capitalized }
 
     var delay: TimeInterval {
         switch self {
@@ -55,6 +59,7 @@ struct SideDeckPreferences: Codable, Equatable {
     var accent: AccentChoice
     var density: DockDensity
     var translucencyEnabled: Bool
+    var glowEnabled: Bool
     var dockOnRight: Bool
     var keepOpen: Bool
     var collapseSpeed: CollapseSpeed
@@ -66,12 +71,56 @@ struct SideDeckPreferences: Codable, Equatable {
         accent: .blue,
         density: .compact,
         translucencyEnabled: true,
+        glowEnabled: true,
         dockOnRight: true,
         keepOpen: true,
         collapseSpeed: .normal,
         showInDock: true,
         visibleWidgets: Set(DockWidgetType.allCases)
     )
+
+    private enum CodingKeys: String, CodingKey {
+        case appearance, accent, density, translucencyEnabled, glowEnabled
+        case dockOnRight, keepOpen, collapseSpeed, showInDock, visibleWidgets
+    }
+
+    init(
+        appearance: AppearanceMode,
+        accent: AccentChoice,
+        density: DockDensity,
+        translucencyEnabled: Bool,
+        glowEnabled: Bool,
+        dockOnRight: Bool,
+        keepOpen: Bool,
+        collapseSpeed: CollapseSpeed,
+        showInDock: Bool,
+        visibleWidgets: Set<DockWidgetType>
+    ) {
+        self.appearance = appearance
+        self.accent = accent
+        self.density = density
+        self.translucencyEnabled = translucencyEnabled
+        self.glowEnabled = glowEnabled
+        self.dockOnRight = dockOnRight
+        self.keepOpen = keepOpen
+        self.collapseSpeed = collapseSpeed
+        self.showInDock = showInDock
+        self.visibleWidgets = visibleWidgets
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        appearance = try values.decodeIfPresent(AppearanceMode.self, forKey: .appearance) ?? Self.default.appearance
+        accent = try values.decodeIfPresent(AccentChoice.self, forKey: .accent) ?? Self.default.accent
+        density = try values.decodeIfPresent(DockDensity.self, forKey: .density) ?? Self.default.density
+        translucencyEnabled = try values.decodeIfPresent(Bool.self, forKey: .translucencyEnabled) ?? Self.default.translucencyEnabled
+        glowEnabled = try values.decodeIfPresent(Bool.self, forKey: .glowEnabled) ?? true
+        dockOnRight = try values.decodeIfPresent(Bool.self, forKey: .dockOnRight) ?? Self.default.dockOnRight
+        keepOpen = try values.decodeIfPresent(Bool.self, forKey: .keepOpen) ?? Self.default.keepOpen
+        collapseSpeed = try values.decodeIfPresent(CollapseSpeed.self, forKey: .collapseSpeed) ?? Self.default.collapseSpeed
+        showInDock = try values.decodeIfPresent(Bool.self, forKey: .showInDock) ?? Self.default.showInDock
+        visibleWidgets = try values.decodeIfPresent(Set<DockWidgetType>.self, forKey: .visibleWidgets) ?? Self.default.visibleWidgets
+    }
 }
 
 @MainActor
@@ -101,6 +150,7 @@ final class SideDeckPreferencesStore: ObservableObject {
     func setAccent(_ value: AccentChoice) { update { $0.accent = value } }
     func setDensity(_ value: DockDensity) { update { $0.density = value } }
     func setTranslucency(_ value: Bool) { update { $0.translucencyEnabled = value } }
+    func setGlowEnabled(_ value: Bool) { update { $0.glowEnabled = value } }
     func setDockOnRight(_ value: Bool) { update { $0.dockOnRight = value } }
     func setKeepOpen(_ value: Bool) { update { $0.keepOpen = value } }
     func setCollapseSpeed(_ value: CollapseSpeed) { update { $0.collapseSpeed = value } }

@@ -25,6 +25,7 @@ final class SideDeckPreferencesTests: XCTestCase {
 
         XCTAssertEqual(preferences.appearance, .system)
         XCTAssertEqual(preferences.density, .compact)
+        XCTAssertTrue(preferences.glowEnabled)
         XCTAssertEqual(preferences.visibleWidgets, Set(DockWidgetType.allCases))
     }
 
@@ -55,5 +56,27 @@ final class SideDeckPreferencesTests: XCTestCase {
         let store = SideDeckPreferencesStore(defaults: defaults)
 
         XCTAssertEqual(store.preferences, .default)
+    }
+
+    func testGlowPreferencePersists() {
+        let store = SideDeckPreferencesStore(defaults: defaults)
+
+        store.setGlowEnabled(false)
+        let reloaded = SideDeckPreferencesStore(defaults: defaults)
+
+        XCTAssertFalse(reloaded.preferences.glowEnabled)
+    }
+
+    func testOlderPreferencesWithoutGlowKeepTheirValuesAndDefaultGlowOn() throws {
+        let legacyJSON = """
+        {"appearance":"light","accent":"teal","density":"comfortable","translucencyEnabled":false,"dockOnRight":false,"keepOpen":false,"collapseSpeed":"fast","showInDock":false,"visibleWidgets":["notes"]}
+        """
+        defaults.set(try XCTUnwrap(legacyJSON.data(using: .utf8)), forKey: SideDeckPreferencesStore.storageKey)
+
+        let store = SideDeckPreferencesStore(defaults: defaults)
+
+        XCTAssertEqual(store.preferences.appearance, .light)
+        XCTAssertEqual(store.preferences.visibleWidgets, [.notes])
+        XCTAssertTrue(store.preferences.glowEnabled)
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 // MARK: - Floating Key-Capable Panel
@@ -74,14 +75,15 @@ class CustomTrackingView<Content: View>: NSHostingView<Content> {
     override func hitTest(_ point: NSPoint) -> NSView? {
         let isRight = AppDelegate.shared?.isDockOnRight ?? true
         let activeWidget = AppDelegate.shared?.hoverState.activeWidget
+        let settingsOpen = AppDelegate.shared?.hoverState.isSettingsOpen ?? false
         let layout = AppDelegate.shared?.currentLayout ?? .preferred
         let flyoutWidth = activeWidget.map { layout.flyoutOuterWidth(for: $0) } ?? 0
         return PanelHitRegion.contains(
             point,
             in: bounds,
             dockOnRight: isRight,
-            flyoutOpen: activeWidget != nil,
-            flyoutWidth: flyoutWidth,
+            flyoutOpen: activeWidget != nil || settingsOpen,
+            flyoutWidth: settingsOpen ? min(430, max(0, layout.panelSize.width - SideDeckLayout.dockWidth - SideDeckLayout.flyoutGap)) : flyoutWidth,
             dockCollapsed: AppDelegate.shared?.hoverState.isDockCollapsed ?? false
         )
             ? super.hitTest(point)
@@ -99,6 +101,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
     var isDockOnRight: Bool = true
     var showInDock: Bool = true
     private var dockScreen: NSScreen?
+    private var preferenceCancellable: AnyCancellable?
 
     let hoverState = SideDeckHoverState()
     let state = SideDeckState()
@@ -116,14 +119,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
         hoverState.delegate = self
 
         // Load saved preferences
-        showInDock = UserDefaults.standard.object(forKey: "showInDock") as? Bool ?? true
-        isDockOnRight = UserDefaults.standard.object(forKey: "isDockOnRight") as? Bool ?? true
+        showInDock = preferencesStore.preferences.showInDock
+        isDockOnRight = preferencesStore.preferences.dockOnRight
+        hoverState.setPinned(preferencesStore.preferences.keepOpen)
+        hoverState.setCollapseDelay(preferencesStore.preferences.collapseSpeed.delay)
         dockScreen = screenUnderMouse() ?? NSScreen.main
 
         NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
 
         setupStatusItem()
         setupFloatingPanel()
+        applyPanelAppearance(preferencesStore.preferences.appearance)
+
+        preferenceCancellable = preferencesStore.$preferences
+            .dropFirst()
+            .sink { [weak self] preferences in
+                self?.apply(preferences)
+            }
 
         NotificationCenter.default.addObserver(
             self,
@@ -186,6 +198,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
         collapseItem.isEnabled = !hoverState.isDockCollapsed
         menu.addItem(collapseItem)
 
+        let settingsItem = NSMenuItem(title: "Customize SideDeck…", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
         let dockItem = NSMenuItem(title: "Show in macOS Dock", action: #selector(toggleShowInDock), keyEquivalent: "")
         dockItem.target = self
         dockItem.state = showInDock ? .on : .off
@@ -227,6 +243,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
                 isDockOnRight: self.isDockOnRight,
                 hoverState: self.hoverState,
                 state: self.state,
+                preferencesStore: self.preferencesStore,
                 layout: self.currentLayout
             )
         }
@@ -288,11 +305,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
     }
 
     @objc func togglePinned() {
-        hoverState.togglePinned()
+        preferencesStore.setKeepOpen(!preferencesStore.preferences.keepOpen)
     }
 
     @objc func collapseDock() {
         hoverState.collapseDock()
+    }
+
+    @objc func openSettings() {
+        if !hoverState.isSettingsOpen {
+            hoverState.toggleSettings()
+        }
+        panel.orderFrontRegardless()
     }
 
     @objc func togglePanel() {
@@ -305,26 +329,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
     }
 
     @objc func toggleShowInDock() {
-        showInDock.toggle()
-        UserDefaults.standard.set(showInDock, forKey: "showInDock")
-        NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
-        setupStatusItem()
+        preferencesStore.setShowInDock(!preferencesStore.preferences.showInDock)
     }
 
     @objc func dockLeft() {
-        isDockOnRight = false
-        UserDefaults.standard.set(false, forKey: "isDockOnRight")
-        setupStatusItem()
-        rebuildHostingView()
-        updatePanelPosition(animated: false)
+        preferencesStore.setDockOnRight(false)
     }
 
     @objc func dockRight() {
-        isDockOnRight = true
-        UserDefaults.standard.set(true, forKey: "isDockOnRight")
+        preferencesStore.setDockOnRight(true)
+    }
+
+    private func apply(_ preferences: SideDeckPreferences) {
+        let sideChanged = isDockOnRight != preferences.dockOnRight
+        let dockVisibilityChanged = showInDock != preferences.showInDock
+        isDockOnRight = preferences.dockOnRight
+        showInDock = preferences.showInDock
+        hoverState.setPinned(preferences.keepOpen)
+        hoverState.setCollapseDelay(preferences.collapseSpeed.delay)
+        if dockVisibilityChanged {
+            NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
+        }
+        applyPanelAppearance(preferences.appearance)
         setupStatusItem()
-        rebuildHostingView()
+        if sideChanged {
+            rebuildHostingView()
+        }
         updatePanelPosition(animated: false)
+    }
+
+    private func applyPanelAppearance(_ mode: AppearanceMode) {
+        switch mode {
+        case .system: panel?.appearance = nil
+        case .dark: panel?.appearance = NSAppearance(named: .darkAqua)
+        case .light: panel?.appearance = NSAppearance(named: .aqua)
+        }
     }
 
     @objc func quitApp() {

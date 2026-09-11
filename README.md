@@ -19,7 +19,8 @@ SideDeck is a featherweight, native macOS edge dock utility that stays pinned cl
 3. **36-Day Habit Grid**: Interactive daily streak heatmap with toggleable milestones and instant local persistence.
 4. **Fluid Hydration Slosh**: Real-time interactive water cup with sine-wave fluid animation, tracking daily intake progress.
 5. **Quick Micro Scratchpad**: Ephemeral sticky note buffer pinned to the dock for fast copy-pasting and temporary thoughts.
-6. **Zero Bloat, Native Performance**: Written 100% in pure SwiftUI & AppKit (`NSPanel`), running at less than 15 MB of RAM and zero GPU overhead.
+6. **Customizable Appearance**: System, dark, and light modes; accent colors; density; translucency; optional outer glow; and per-widget visibility.
+7. **Zero Bloat, Native Performance**: Written in pure SwiftUI & AppKit (`NSPanel`) with local persistence.
 
 ---
 
@@ -27,7 +28,7 @@ SideDeck is a featherweight, native macOS edge dock utility that stays pinned cl
 
 ### Direct Download
 Download the signed DMG directly from Atlas Studios:
-- [Download SideDeck 1.1.1 DMG](https://tejastelkar.is-a.dev/assets/SideDeck-1.1.1.dmg)
+- [Download SideDeck 1.2.0 DMG](https://tejastelkar.is-a.dev/assets/SideDeck-1.2.0.dmg)
 
 ### Homebrew Cask
 ```bash
@@ -53,7 +54,7 @@ cd sidedeck
 ```
 
 The package script selects the full Xcode toolchain when available and writes
-`build/SideDeck.app` plus `build/SideDeck-1.1.1.dmg`. Use `--app-only` for a fast
+`build/SideDeck.app` plus `build/SideDeck-1.2.0.dmg`. Use `--app-only` for a fast
 local app build, or `--install` to explicitly replace `/Applications/SideDeck.app`.
 
 Run the regression suite with:

@@ -31,6 +31,7 @@ enum SideDeckTheme {
     static let surface = Color(light: 0xFFFFFF, dark: 0x171A1F)
     static let elevatedSurface = Color(light: 0xF3F6FA, dark: 0x1D2127)
     static let accent = Color.accentColor
+    static let onAccent = Color.white
     static let primaryText = Color(light: 0x15181D, dark: 0xF5F7FA)
     static let secondaryText = Color(light: 0x626A76, dark: 0x9299A6)
     static let tertiaryText = Color(light: 0x858D99, dark: 0x69717E)
@@ -85,6 +86,7 @@ enum DockWidgetType: String, CaseIterable, Identifiable, Codable, Hashable {
     case notes
 
     var id: String { rawValue }
+    var title: String { rawValue.capitalized }
 }
 
 struct SideDeckLayout {
@@ -146,14 +148,29 @@ struct SideDeckLayout {
     }
 
     func dockCardCenterY(for type: DockWidgetType) -> CGFloat {
-        let top = Self.dockTopInset + Self.dockPadding
+        dockCardCenterY(for: type, visibleWidgets: Set(DockWidgetType.allCases), spacing: Self.dockSpacing)
+    }
+
+    func dockCardCenterY(
+        for type: DockWidgetType,
+        visibleWidgets: Set<DockWidgetType>,
+        spacing: CGFloat
+    ) -> CGFloat {
+        var y = Self.dockTopInset + Self.dockPadding
+        for widget in DockWidgetType.allCases where visibleWidgets.contains(widget) {
+            let height = dockCardHeight(for: widget)
+            if widget == type { return y + height / 2 }
+            y += height + spacing
+        }
+        return y
+    }
+
+    private func dockCardHeight(for type: DockWidgetType) -> CGFloat {
         switch type {
-        case .focus: return top + 135.1 / 2
-        case .clock: return top + 135.1 + Self.dockSpacing + 55.4 / 2
-        case .battery: return top + 135.1 + Self.dockSpacing + 55.4 + Self.dockSpacing + 55.4 / 2
-        case .habits: return top + 135.1 + Self.dockSpacing + 55.4 + Self.dockSpacing + 55.4 + Self.dockSpacing + 80.1 / 2
-        case .water: return top + 135.1 + Self.dockSpacing + 55.4 + Self.dockSpacing + 55.4 + Self.dockSpacing + 80.1 + Self.dockSpacing + 80.1 / 2
-        case .notes: return top + 135.1 + Self.dockSpacing + 55.4 + Self.dockSpacing + 55.4 + Self.dockSpacing + 80.1 + Self.dockSpacing + 80.1 + Self.dockSpacing + 74.3 / 2
+        case .focus: return 135.1
+        case .clock, .battery: return 55.4
+        case .habits, .water: return 80.08
+        case .notes: return 74.34
         }
     }
 
@@ -233,12 +250,14 @@ class SideDeckHoverState: ObservableObject {
     @Published var isHandleHovered: Bool = false
     @Published private(set) var isDockCollapsed: Bool = false
     @Published private(set) var isPinned: Bool
+    @Published private(set) var isSettingsOpen: Bool = false
+    private(set) var transitionCount: Int = 0
 
     private var collapseWorkItem: DispatchWorkItem?
     private var hoveredCard: DockWidgetType?
     private var clickedWidget: DockWidgetType?
     private let defaults: UserDefaults
-    private let collapseDelay: Double
+    private var collapseDelay: Double
 
     init(defaults: UserDefaults = .standard, collapseDelay: Double = 0.16) {
         self.defaults = defaults
@@ -247,6 +266,10 @@ class SideDeckHoverState: ObservableObject {
     }
 
     func setPinned(_ pinned: Bool) {
+        guard isPinned != pinned else {
+            if pinned { expandDock() }
+            return
+        }
         isPinned = pinned
         defaults.set(pinned, forKey: "sidedeck_dock_pinned")
         if pinned {
@@ -259,10 +282,15 @@ class SideDeckHoverState: ObservableObject {
         setPinned(!isPinned)
     }
 
+    func setCollapseDelay(_ delay: Double) {
+        collapseDelay = max(0.04, min(delay, 0.5))
+    }
+
     func expandDock() {
         collapseWorkItem?.cancel()
         if isDockCollapsed {
             isDockCollapsed = false
+            transitionCount += 1
             delegate?.setExpanded(true)
         }
     }
@@ -272,9 +300,13 @@ class SideDeckHoverState: ObservableObject {
         collapseWorkItem?.cancel()
         hoveredCard = nil
         isHoveringFlyout = false
-        activeWidget = nil
+        setActiveWidget(nil)
         clickedWidget = nil
-        isDockCollapsed = true
+        isSettingsOpen = false
+        if !isDockCollapsed {
+            isDockCollapsed = true
+            transitionCount += 1
+        }
         delegate?.setExpanded(false)
     }
 
@@ -284,22 +316,24 @@ class SideDeckHoverState: ObservableObject {
         collapseWorkItem = nil
         hoveredCard = type
         if clickedWidget == nil, activeWidget != type {
-            activeWidget = type
-            delegate?.setExpanded(true)
+            if !isSettingsOpen {
+                setActiveWidget(type)
+                delegate?.setExpanded(true)
+            }
         }
     }
 
     func toggleCard(_ type: DockWidgetType) {
         expandDock()
         collapseWorkItem?.cancel()
-        withAnimation(.easeOut(duration: 0.14)) {
-            if clickedWidget == type {
-                clickedWidget = nil
-                activeWidget = nil
-            } else {
-                clickedWidget = type
-                activeWidget = type
-            }
+        collapseWorkItem = nil
+        isSettingsOpen = false
+        if clickedWidget == type {
+            clickedWidget = nil
+            setActiveWidget(nil)
+        } else {
+            clickedWidget = type
+            setActiveWidget(type)
         }
     }
 
@@ -312,6 +346,7 @@ class SideDeckHoverState: ObservableObject {
     func hoverFlyout() {
         collapseWorkItem?.cancel()
         collapseWorkItem = nil
+        isSettingsOpen = false
         isHoveringFlyout = true
     }
 
@@ -324,12 +359,13 @@ class SideDeckHoverState: ObservableObject {
         collapseWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
-            if self.hoveredCard == nil && !self.isHoveringFlyout && self.clickedWidget == nil {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                    self.activeWidget = nil
-                }
+            if self.hoveredCard == nil && !self.isHoveringFlyout && self.clickedWidget == nil && !self.isSettingsOpen {
+                self.setActiveWidget(nil)
                 if !self.isPinned {
-                    self.isDockCollapsed = true
+                    if !self.isDockCollapsed {
+                        self.isDockCollapsed = true
+                        self.transitionCount += 1
+                    }
                 }
                 self.delegate?.setExpanded(!self.isDockCollapsed)
             }
@@ -337,9 +373,27 @@ class SideDeckHoverState: ObservableObject {
         collapseWorkItem = item
         DispatchQueue.main.asyncAfter(deadline: .now() + (delay ?? collapseDelay), execute: item)
     }
+
+    func toggleSettings() {
+        expandDock()
+        collapseWorkItem?.cancel()
+        collapseWorkItem = nil
+        clickedWidget = nil
+        setActiveWidget(nil)
+        isSettingsOpen.toggle()
+        transitionCount += 1
+        delegate?.setExpanded(true)
+    }
+
+    private func setActiveWidget(_ widget: DockWidgetType?) {
+        guard activeWidget != widget else { return }
+        activeWidget = widget
+        transitionCount += 1
+    }
 }
 
 // MARK: - Observable Application State with Real Hardware Integration & Persistence
+@MainActor
 class SideDeckState: ObservableObject {
     // Focus Timer
     @Published var taskName: String = "Draw the new landing page"
@@ -362,6 +416,7 @@ class SideDeckState: ObservableObject {
     @Published var timeRemainingMinutes: Int? = nil
     @Published var isWifiOn: Bool = true
     @Published var wifiNetwork: String = "Wi-Fi"
+    @Published var wifiDetail: String = "Checking network…"
     @Published var wifiRSSI: Int = -60
     @Published var networks: [(name: String, strength: Int, locked: Bool, current: Bool)] = []
 
@@ -383,15 +438,23 @@ class SideDeckState: ObservableObject {
     @Published var newNoteInput: String = ""
 
     private var timerCancellable: AnyCancellable?
+    private var wifiCancellable: AnyCancellable?
+    private var wifiMonitor: WiFiMonitor?
     private let defaults: UserDefaults
     private var lastHabitCheckIn: Date?
 
-    init(defaults: UserDefaults = .standard, startServices: Bool = true) {
+    init(defaults: UserDefaults = .standard, startServices: Bool = true, now: Date = Date()) {
         self.defaults = defaults
-        loadPersistedData()
+        loadPersistedData(now: now)
         applyHourMode()
 
         if startServices {
+            let monitor = WiFiMonitor()
+            wifiMonitor = monitor
+            wifiCancellable = monitor.$snapshot.sink { [weak self] snapshot in
+                self?.applyWiFiSnapshot(snapshot)
+            }
+            monitor.start()
             updateSystemBattery()
             updateSystemWifi()
 
@@ -445,19 +508,17 @@ class SideDeckState: ObservableObject {
 
     // MARK: - Real Wi-Fi Monitoring
     func updateSystemWifi() {
-        if let iface = CWWiFiClient.shared().interface() {
-            self.isWifiOn = iface.powerOn()
-            if let ssid = iface.ssid(), !ssid.isEmpty {
-                self.wifiNetwork = ssid
-            } else {
-                self.wifiNetwork = iface.powerOn() ? "Connected" : "Wi-Fi Off"
-            }
-            self.wifiRSSI = iface.rssiValue()
+        wifiMonitor?.refresh()
+    }
 
-            self.networks = self.isWifiOn && self.wifiNetwork != "Connected"
-                ? [(name: self.wifiNetwork, strength: self.wifiRSSI, locked: false, current: true)]
-                : []
-        }
+    private func applyWiFiSnapshot(_ snapshot: WiFiSnapshot) {
+        isWifiOn = snapshot.isPowered
+        wifiNetwork = snapshot.name
+        wifiDetail = snapshot.detail
+        wifiRSSI = snapshot.rssi
+        networks = snapshot.isConnected
+            ? [(name: snapshot.name, strength: snapshot.rssi, locked: false, current: true)]
+            : []
     }
 
     func toggleWifiPower() {
@@ -475,7 +536,7 @@ class SideDeckState: ObservableObject {
     }
 
     // MARK: - Persistence
-    func loadPersistedData() {
+    func loadPersistedData(now: Date = Date()) {
         // Tasks
         if let data = defaults.data(forKey: "sidedeck_tasks"),
            let loaded = try? JSONDecoder().decode([ChecklistItem].self, from: data) {
@@ -504,33 +565,37 @@ class SideDeckState: ObservableObject {
             ]
         }
 
-        // Habits
-        if let savedHabits = defaults.array(forKey: "sidedeck_habits") as? [Int], savedHabits.count == 36 {
-            self.habitMatrix = savedHabits
+        // Habits. Version 1.1 shipped generated demo patterns; migrate them once
+        // to the single real check-in represented by the user's existing data.
+        let migrationKey = "sidedeck_habit_history_v2_migrated"
+        let hasLegacyHistory = defaults.object(forKey: "sidedeck_habits") != nil
+            || defaults.object(forKey: "sidedeck_annual_habits") != nil
+            || defaults.object(forKey: "sidedeck_habit_today_count") != nil
+        if !defaults.bool(forKey: migrationKey), hasLegacyHistory {
+            self.habitMatrix = Array(repeating: 0, count: 36)
+            self.annualHabitMatrix = Array(repeating: 0, count: 140)
+            self.habitMatrix[35] = 1
+            self.annualHabitMatrix[139] = 1
+            self.habitStreak = 1
+            self.habitTodayCount = 1
+            self.lastHabitCheckIn = now
+            defaults.set(now, forKey: "sidedeck_habit_last_checkin")
+            defaults.set(1, forKey: "sidedeck_habit_streak")
+            defaults.set(1, forKey: "sidedeck_habit_today_count")
+            saveHabits()
         } else {
-            self.habitMatrix = [
-                2,3,1,4,2,0,
-                1,3,4,2,3,1,
-                0,2,4,3,2,4,
-                1,0,3,4,2,3,
-                1,2,4,3,0,2,
-                3,4,2,1,3,4
-            ]
+            self.habitMatrix = (defaults.array(forKey: "sidedeck_habits") as? [Int]).flatMap { $0.count == 36 ? $0 : nil }
+                ?? Array(repeating: 0, count: 36)
+            self.annualHabitMatrix = (defaults.array(forKey: "sidedeck_annual_habits") as? [Int]).flatMap { $0.count == 140 ? $0 : nil }
+                ?? Array(repeating: 0, count: 140)
+            self.habitStreak = max(0, defaults.integer(forKey: "sidedeck_habit_streak"))
+            self.habitTodayCount = max(0, defaults.integer(forKey: "sidedeck_habit_today_count"))
+            self.lastHabitCheckIn = defaults.object(forKey: "sidedeck_habit_last_checkin") as? Date
+            if let lastHabitCheckIn, !Calendar.current.isDate(lastHabitCheckIn, inSameDayAs: now) {
+                self.habitTodayCount = 0
+            }
         }
-
-        // Annual Habits (140 dots)
-        if let savedAnnual = defaults.array(forKey: "sidedeck_annual_habits") as? [Int], savedAnnual.count == 140 {
-            self.annualHabitMatrix = savedAnnual
-        } else {
-            self.annualHabitMatrix = (0..<140).map { ($0 * 7 + 3) % 5 }
-        }
-        self.habitStreak = defaults.object(forKey: "sidedeck_habit_streak") == nil
-            ? 0
-            : defaults.integer(forKey: "sidedeck_habit_streak")
-        self.habitTodayCount = defaults.object(forKey: "sidedeck_habit_today_count") == nil
-            ? 0
-            : defaults.integer(forKey: "sidedeck_habit_today_count")
-        self.lastHabitCheckIn = defaults.object(forKey: "sidedeck_habit_last_checkin") as? Date
+        defaults.set(true, forKey: migrationKey)
 
         // Water
         if defaults.object(forKey: "sidedeck_water_ml") != nil {
@@ -679,9 +744,25 @@ class SideDeckState: ObservableObject {
         if !habitMatrix.isEmpty {
             habitMatrix[habitMatrix.count - 1] = min(4, habitMatrix[habitMatrix.count - 1] + 1)
         }
+        if !annualHabitMatrix.isEmpty {
+            annualHabitMatrix[annualHabitMatrix.count - 1] = min(4, annualHabitMatrix[annualHabitMatrix.count - 1] + 1)
+        }
         defaults.set(habitStreak, forKey: "sidedeck_habit_streak")
         defaults.set(habitTodayCount, forKey: "sidedeck_habit_today_count")
         defaults.set(date, forKey: "sidedeck_habit_last_checkin")
+        saveHabits()
+    }
+
+    func resetHabitHistory() {
+        habitMatrix = Array(repeating: 0, count: 36)
+        annualHabitMatrix = Array(repeating: 0, count: 140)
+        habitStreak = 0
+        habitTodayCount = 0
+        lastHabitCheckIn = nil
+        defaults.set(0, forKey: "sidedeck_habit_streak")
+        defaults.set(0, forKey: "sidedeck_habit_today_count")
+        defaults.removeObject(forKey: "sidedeck_habit_last_checkin")
+        defaults.set(true, forKey: "sidedeck_habit_history_v2_migrated")
         saveHabits()
     }
 
@@ -778,18 +859,21 @@ struct SideDeckView: View {
     var isDockOnRight: Bool = true
     @ObservedObject var hoverState: SideDeckHoverState
     @ObservedObject var state: SideDeckState
+    @ObservedObject var preferencesStore: SideDeckPreferencesStore
     let layout: SideDeckLayout
     @State private var wavePhase: Double = 0
 
     init(
         isDockOnRight: Bool = true,
         hoverState: SideDeckHoverState,
-        state: SideDeckState = SideDeckState(),
+        state: SideDeckState,
+        preferencesStore: SideDeckPreferencesStore,
         layout: SideDeckLayout = .preferred
     ) {
         self.isDockOnRight = isDockOnRight
         self.hoverState = hoverState
         self.state = state
+        self.preferencesStore = preferencesStore
         self.layout = layout
     }
 
@@ -808,7 +892,32 @@ struct SideDeckView: View {
             }
 
             // 2. Active Flyout Popover with pointed callout arrow
-            if !hoverState.isDockCollapsed, let active = hoverState.activeWidget {
+            if !hoverState.isDockCollapsed, hoverState.isSettingsOpen {
+                SettingsFlyout(
+                    store: preferencesStore,
+                    state: state,
+                    close: hoverState.toggleSettings
+                )
+                .frame(width: min(390, max(260, layout.panelSize.width - SideDeckLayout.dockWidth - 56)))
+                .padding(20)
+                .background(flyoutBackground)
+                .clipShape(RoundedRectangle(cornerRadius: SideDeckTheme.Radius.flyout, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SideDeckTheme.Radius.flyout, style: .continuous)
+                        .stroke(SideDeckTheme.border, lineWidth: 1)
+                )
+                .shadow(
+                    color: preferencesStore.preferences.glowEnabled ? SideDeckTheme.canvas.opacity(0.35) : .clear,
+                    radius: 18,
+                    x: 0,
+                    y: 8
+                )
+                .offset(
+                    x: isDockOnRight ? -(SideDeckLayout.dockWidth + SideDeckLayout.flyoutGap) : (SideDeckLayout.dockWidth + SideDeckLayout.flyoutGap),
+                    y: SideDeckLayout.screenVerticalMargin
+                )
+                .onHover { $0 ? hoverState.hoverFlyout() : hoverState.exitFlyout() }
+            } else if !hoverState.isDockCollapsed, let active = hoverState.activeWidget {
                 let coords = flyoutCoordinates(for: active)
                 let flyoutX = isDockOnRight
                     ? -(SideDeckLayout.dockWidth + SideDeckLayout.flyoutGap)
@@ -845,12 +954,12 @@ struct SideDeckView: View {
     private var collapsedEdgeTab: some View {
         Button(action: { hoverState.expandDock() }) {
             RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
-                .fill(Color(hex: 0x171A1F))
+                .fill(SideDeckTheme.surface)
                 .frame(width: SideDeckLayout.collapsedTabWidth, height: SideDeckLayout.collapsedTabHeight)
                 .overlay(
                     Image(systemName: isDockOnRight ? "chevron.left" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Color(hex: 0x9299A6))
+                        .foregroundColor(SideDeckTheme.secondaryText)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: SideDeckTheme.Radius.control, style: .continuous)
@@ -867,69 +976,71 @@ struct SideDeckView: View {
 
     // MARK: - Dock Column Container
     private var dockContainer: some View {
-        VStack(spacing: cardSpacing) {
+        VStack(spacing: preferencesStore.preferences.density == .compact ? cardSpacing : 7) {
             // 1. Focus Card
-            FocusCard(state: state)
+            if preferencesStore.preferences.visibleWidgets.contains(.focus) { FocusCard(state: state)
                 .cardDimming(isActive: hoverState.activeWidget == nil || hoverState.activeWidget == .focus)
                 .contentShape(Rectangle())
                 .onTapGesture { hoverState.toggleCard(.focus) }
                 .onHover { h in
                     if h { hoverState.hoverCard(.focus) } else { hoverState.exitCard(.focus) }
-                }
+                } }
 
             // 2. Clock Card
-            ClockCard(state: state)
+            if preferencesStore.preferences.visibleWidgets.contains(.clock) { ClockCard(state: state)
                 .cardDimming(isActive: hoverState.activeWidget == nil || hoverState.activeWidget == .clock)
                 .contentShape(Rectangle())
                 .onTapGesture { hoverState.toggleCard(.clock) }
                 .onHover { h in
                     if h { hoverState.hoverCard(.clock) } else { hoverState.exitCard(.clock) }
-                }
+                } }
 
             // 3. Status Card (Real Battery + Wi-Fi)
-            StatusCard(state: state)
+            if preferencesStore.preferences.visibleWidgets.contains(.battery) { StatusCard(state: state)
                 .cardDimming(isActive: hoverState.activeWidget == nil || hoverState.activeWidget == .battery)
                 .contentShape(Rectangle())
                 .onTapGesture { hoverState.toggleCard(.battery) }
                 .onHover { h in
                     if h { hoverState.hoverCard(.battery) } else { hoverState.exitCard(.battery) }
-                }
+                } }
 
             // 4. Habits Card
-            HabitsCard(state: state)
+            if preferencesStore.preferences.visibleWidgets.contains(.habits) { HabitsCard(state: state)
                 .cardDimming(isActive: hoverState.activeWidget == nil || hoverState.activeWidget == .habits)
                 .contentShape(Rectangle())
                 .onTapGesture { hoverState.toggleCard(.habits) }
                 .onHover { h in
                     if h { hoverState.hoverCard(.habits) } else { hoverState.exitCard(.habits) }
-                }
+                } }
 
             // 5. Hydration Card (Dynamic Water Level)
-            HydrationCard(state: state, wavePhase: wavePhase)
+            if preferencesStore.preferences.visibleWidgets.contains(.water) { HydrationCard(state: state, wavePhase: wavePhase)
                 .cardDimming(isActive: hoverState.activeWidget == nil || hoverState.activeWidget == .water)
                 .contentShape(Rectangle())
                 .onTapGesture { hoverState.toggleCard(.water) }
                 .onHover { h in
                     if h { hoverState.hoverCard(.water) } else { hoverState.exitCard(.water) }
-                }
+                } }
 
             // 6. Notes Card
-            NotesCard(state: state)
+            if preferencesStore.preferences.visibleWidgets.contains(.notes) { NotesCard(state: state)
                 .cardDimming(isActive: hoverState.activeWidget == nil || hoverState.activeWidget == .notes)
                 .contentShape(Rectangle())
                 .onTapGesture { hoverState.toggleCard(.notes) }
                 .onHover { h in
                     if h { hoverState.hoverCard(.notes) } else { hoverState.exitCard(.notes) }
-                }
+                } }
 
             // 7. Bottom Expanding Handle
-            SettingsHandle(hoverState: hoverState)
+            SettingsHandle(hoverState: hoverState, preferencesStore: preferencesStore)
         }
         .padding(dockPadding)
         .frame(width: SideDeckLayout.dockWidth)
         .background(
             ZStack {
-                VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
+                if preferencesStore.preferences.translucencyEnabled {
+                    VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
+                }
                 SideDeckTheme.rail.opacity(0.94)
             }
         )
@@ -938,13 +1049,27 @@ struct SideDeckView: View {
             RoundedRectangle(cornerRadius: SideDeckTheme.Radius.rail, style: .continuous)
                 .stroke(SideDeckTheme.border.opacity(0.9), lineWidth: 1)
         )
-        .shadow(color: SideDeckTheme.canvas.opacity(0.45), radius: 14, x: 0, y: 6)
+        .shadow(
+            color: preferencesStore.preferences.glowEnabled ? SideDeckTheme.canvas.opacity(0.45) : .clear,
+            radius: 14,
+            x: 0,
+            y: 6
+        )
         .onHover { hovering in
             if hovering {
                 hoverState.expandDock()
             } else {
                 hoverState.scheduleCollapseIfOutside()
             }
+        }
+    }
+
+    private var flyoutBackground: some View {
+        ZStack {
+            if preferencesStore.preferences.translucencyEnabled {
+                VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
+            }
+            SideDeckTheme.rail.opacity(preferencesStore.preferences.translucencyEnabled ? 0.94 : 1)
         }
     }
 
@@ -982,7 +1107,9 @@ struct SideDeckView: View {
         .padding(.vertical, SideDeckLayout.flyoutVerticalPadding)
         .background(
             ZStack {
-                VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
+                if preferencesStore.preferences.translucencyEnabled {
+                    VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
+                }
                 SideDeckTheme.rail.opacity(0.96)
             }
         )
@@ -991,14 +1118,29 @@ struct SideDeckView: View {
             FlyoutCalloutShape(beakY: beakY, isPointingLeft: !isDockOnRight)
                 .stroke(SideDeckTheme.border, lineWidth: 1)
         )
-        .shadow(color: SideDeckTheme.canvas.opacity(0.48), radius: 18, x: 0, y: 8)
+        .shadow(
+            color: preferencesStore.preferences.glowEnabled ? SideDeckTheme.canvas.opacity(0.48) : .clear,
+            radius: 18,
+            x: 0,
+            y: 8
+        )
     }
 
     // MARK: - Coordinate Math for Aligning Beak with Card Center
     private func flyoutCoordinates(for type: DockWidgetType) -> (y: CGFloat, beakY: CGFloat, width: CGFloat) {
         let flyoutW = layout.flyoutContentWidth(for: type)
-        let topY = layout.flyoutTop(for: type)
-        let beakY = layout.dockCardCenterY(for: type) - topY
+        let spacing = preferencesStore.preferences.density == .compact ? cardSpacing : 7
+        let centerY = layout.dockCardCenterY(
+            for: type,
+            visibleWidgets: preferencesStore.preferences.visibleWidgets,
+            spacing: spacing
+        )
+        let height = layout.flyoutHeight(for: type)
+        let topY = max(
+            SideDeckLayout.screenVerticalMargin,
+            min(layout.panelSize.height - SideDeckLayout.screenVerticalMargin - height, centerY - height / 2)
+        )
+        let beakY = centerY - topY
 
         return (y: topY, beakY: beakY, width: flyoutW)
     }
@@ -1496,22 +1638,23 @@ struct NotesCard: View {
 // MARK: - CARD 7: BOTTOM EXPANDING HANDLE
 struct SettingsHandle: View {
     @ObservedObject var hoverState: SideDeckHoverState
+    @ObservedObject var preferencesStore: SideDeckPreferencesStore
 
     var body: some View {
         HStack(spacing: 3) {
             handleButton(
-                symbol: hoverState.isPinned ? "pin.fill" : "pin",
-                label: hoverState.isPinned ? "Use auto-collapse" : "Keep dock open"
+                symbol: preferencesStore.preferences.keepOpen ? "pin.fill" : "pin",
+                label: preferencesStore.preferences.keepOpen ? "Use auto-collapse" : "Keep dock open"
             ) {
-                hoverState.togglePinned()
+                preferencesStore.setKeepOpen(!preferencesStore.preferences.keepOpen)
             }
 
             handleButton(symbol: "chevron.compact.right", label: "Collapse to edge") {
                 hoverState.collapseDock()
             }
 
-            handleButton(symbol: "ellipsis", label: "Open SideDeck menu") {
-                hoverState.delegate?.openMenu()
+            handleButton(symbol: "ellipsis", label: "Customize SideDeck") {
+                hoverState.toggleSettings()
             }
         }
         .frame(width: 80.08, height: 30)
@@ -1533,6 +1676,118 @@ struct SettingsHandle: View {
         .buttonStyle(.plain)
         .help(label)
         .accessibilityLabel(label)
+    }
+}
+
+// MARK: - SETTINGS
+struct SettingsFlyout: View {
+    @ObservedObject var store: SideDeckPreferencesStore
+    @ObservedObject var state: SideDeckState
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Customize SideDeck")
+                        .font(.system(size: 17, weight: .bold))
+                    Text("Changes apply immediately")
+                        .font(.system(size: 11))
+                        .foregroundColor(SideDeckTheme.secondaryText)
+                }
+                Spacer()
+                Button(action: close) {
+                    Image(systemName: "xmark")
+                        .frame(width: 26, height: 26)
+                        .background(SideDeckTheme.controlFill)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close settings")
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    settingsSection("Appearance") {
+                        Picker("Mode", selection: binding(\.appearance, store.setAppearance)) {
+                            ForEach(AppearanceMode.allCases) { Text($0.title).tag($0) }
+                        }
+                        Picker("Accent", selection: binding(\.accent, store.setAccent)) {
+                            ForEach(AccentChoice.allCases) { Text($0.title).tag($0) }
+                        }
+                        Picker("Density", selection: binding(\.density, store.setDensity)) {
+                            ForEach(DockDensity.allCases) { Text($0.title).tag($0) }
+                        }
+                        Toggle("Translucent surfaces", isOn: binding(\.translucencyEnabled, store.setTranslucency))
+                        Toggle("Outer glow", isOn: binding(\.glowEnabled, store.setGlowEnabled))
+                    }
+
+                    settingsSection("Dock behavior") {
+                        Picker("Screen edge", selection: binding(\.dockOnRight, store.setDockOnRight)) {
+                            Text("Left").tag(false)
+                            Text("Right").tag(true)
+                        }
+                        Toggle("Keep dock open", isOn: binding(\.keepOpen, store.setKeepOpen))
+                        Picker("Collapse speed", selection: binding(\.collapseSpeed, store.setCollapseSpeed)) {
+                            ForEach(CollapseSpeed.allCases) { Text($0.title).tag($0) }
+                        }
+                        Toggle("Show in macOS Dock", isOn: binding(\.showInDock, store.setShowInDock))
+                    }
+
+                    settingsSection("Visible widgets") {
+                        ForEach(DockWidgetType.allCases) { widget in
+                            Toggle(
+                                widget.title,
+                                isOn: Binding(
+                                    get: { store.preferences.visibleWidgets.contains(widget) },
+                                    set: { _ = store.setWidget(widget, visible: $0) }
+                                )
+                            )
+                        }
+                        Text("At least one widget stays visible.")
+                            .font(.system(size: 10))
+                            .foregroundColor(SideDeckTheme.tertiaryText)
+                    }
+
+                    settingsSection("Data") {
+                        Button("Reset habit history") { state.resetHabitHistory() }
+                            .buttonStyle(.bordered)
+                        Button("Restore customization defaults") { store.reset() }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                .padding(.trailing, 6)
+            }
+            .frame(maxHeight: 510)
+        }
+        .foregroundColor(SideDeckTheme.primaryText)
+    }
+
+    private func binding<Value>(
+        _ keyPath: KeyPath<SideDeckPreferences, Value>,
+        _ setter: @escaping (Value) -> Void
+    ) -> Binding<Value> {
+        Binding(get: { store.preferences[keyPath: keyPath] }, set: setter)
+    }
+
+    private func settingsSection<Content: View>(
+        _ title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(SideDeckTheme.secondaryText)
+            VStack(alignment: .leading, spacing: 8, content: content)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(SideDeckTheme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: SideDeckTheme.Radius.medium, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SideDeckTheme.Radius.medium, style: .continuous)
+                        .stroke(SideDeckTheme.border, lineWidth: 1)
+                )
+        }
     }
 }
 
@@ -1594,7 +1849,7 @@ struct FocusFlyout: View {
                         Text(item.text)
                             .font(.system(size: 13, weight: .regular))
                             .strikethrough(item.isDone)
-                            .foregroundColor(item.isDone ? SideDeckTheme.primaryText.opacity(0.4) : .white)
+                            .foregroundColor(item.isDone ? SideDeckTheme.primaryText.opacity(0.4) : SideDeckTheme.primaryText)
                             .lineLimit(1)
                             .onTapGesture {
                                 state.selectActiveTask(item)
@@ -1757,7 +2012,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("System")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 0 ? .white : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 0 ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(state.hourModeIndex == 0 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
@@ -1770,7 +2025,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("12-hour")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 1 ? .white : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 1 ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(state.hourModeIndex == 1 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
@@ -1783,7 +2038,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("24-hour")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 2 ? .white : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 2 ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(state.hourModeIndex == 2 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
@@ -1811,7 +2066,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("Seconds")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.showSeconds ? .white : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.showSeconds ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(state.showSeconds ? SideDeckTheme.accent : Color.clear)
@@ -1825,7 +2080,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("Date")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.showDateOnCard ? .white : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.showDateOnCard ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(state.showDateOnCard ? SideDeckTheme.accent : Color.clear)
@@ -1915,7 +2170,7 @@ struct StatusFlyout: View {
                 Button(action: { state.toggleWifiPower() }) {
                     Text(state.isWifiOn ? "On" : "Off")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(state.isWifiOn ? .white : SideDeckTheme.primaryText.opacity(0.5))
+                        .foregroundColor(state.isWifiOn ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.5))
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(state.isWifiOn ? SideDeckTheme.accent : SideDeckTheme.primaryText.opacity(0.1))
                         .cornerRadius(SideDeckTheme.Radius.button)
@@ -1932,7 +2187,7 @@ struct StatusFlyout: View {
                     Text(state.wifiNetwork)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(SideDeckTheme.primaryText)
-                    Text("Signal: \(state.wifiRSSI) dBm · \(state.isWifiOn ? "Active" : "Disconnected")")
+                    Text(state.wifiDetail)
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundColor(SideDeckTheme.primaryText.opacity(0.6))
                 }
@@ -2281,7 +2536,7 @@ struct NotesFlyout: View {
                             Text(item.text)
                                 .font(.system(size: 13, weight: .regular))
                                 .strikethrough(item.isDone)
-                                .foregroundColor(item.isDone ? SideDeckTheme.primaryText.opacity(0.4) : .white)
+                                .foregroundColor(item.isDone ? SideDeckTheme.primaryText.opacity(0.4) : SideDeckTheme.primaryText)
                                 .lineLimit(1)
 
                             Spacer()
