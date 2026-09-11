@@ -90,6 +90,7 @@ class CustomTrackingView<Content: View>: NSHostingView<Content> {
 }
 
 // MARK: - Application Delegate
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
     static var shared: AppDelegate?
 
@@ -101,6 +102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
 
     let hoverState = SideDeckHoverState()
     let state = SideDeckState()
+    let preferencesStore = SideDeckPreferencesStore()
 
     var currentLayout: SideDeckLayout {
         guard let screen = dockScreen ?? screenUnderMouse() ?? NSScreen.main else {
@@ -220,12 +222,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
     }
 
     func rebuildHostingView() {
-        let rootView = SideDeckView(
-            isDockOnRight: isDockOnRight,
-            hoverState: hoverState,
-            state: state,
-            layout: currentLayout
-        )
+        let rootView = SideDeckThemeContainer(store: preferencesStore) {
+            SideDeckView(
+                isDockOnRight: self.isDockOnRight,
+                hoverState: self.hoverState,
+                state: self.state,
+                layout: self.currentLayout
+            )
+        }
         let trackingView = CustomTrackingView(rootView: rootView)
         trackingView.onMouseExit = { [weak self] in
             DispatchQueue.main.async {
@@ -330,6 +334,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
 
 // Start Application
 let app = NSApplication.shared
-let delegate = AppDelegate()
+let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
 app.run()

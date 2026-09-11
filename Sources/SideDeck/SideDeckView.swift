@@ -60,7 +60,7 @@ struct VisualEffectBlur: NSViewRepresentable {
 }
 
 // MARK: - Dock Widget Enum
-enum DockWidgetType: String, CaseIterable, Identifiable {
+enum DockWidgetType: String, CaseIterable, Identifiable, Codable, Hashable {
     case focus
     case clock
     case battery
@@ -201,6 +201,7 @@ struct ChecklistItem: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Host Delegate Protocol
+@MainActor
 public protocol SideDeckHostDelegate: AnyObject {
     func setExpanded(_ expanded: Bool)
     func openMenu()
@@ -208,6 +209,7 @@ public protocol SideDeckHostDelegate: AnyObject {
 }
 
 // MARK: - Hover State & Debounce Coordinator
+@MainActor
 class SideDeckHoverState: ObservableObject {
     weak var delegate: SideDeckHostDelegate?
     @Published var activeWidget: DockWidgetType? = nil
