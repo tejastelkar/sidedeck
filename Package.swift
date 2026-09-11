@@ -15,6 +15,10 @@ let package = Package(
             name: "SideDeck",
             dependencies: [],
             path: "Sources/SideDeck"
+        ),
+        .testTarget(
+            name: "SideDeckTests",
+            dependencies: ["SideDeck"]
         )
     ]
 )

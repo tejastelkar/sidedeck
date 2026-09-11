@@ -1,10 +1,50 @@
 import AppKit
 import SwiftUI
 
+// MARK: - Floating Key-Capable Panel
+class FloatingPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
+enum PanelHitRegion {
+    static func contains(
+        _ point: CGPoint,
+        in bounds: CGRect,
+        dockOnRight: Bool,
+        flyoutOpen: Bool,
+        flyoutWidth: CGFloat = 390,
+        dockCollapsed: Bool = false
+    ) -> Bool {
+        if dockCollapsed {
+            let tabWidth = SideDeckLayout.collapsedTabWidth
+            let tabHeight = SideDeckLayout.collapsedTabHeight
+            let tabRect = dockOnRight
+                ? CGRect(x: bounds.maxX - tabWidth, y: bounds.midY - tabHeight / 2, width: tabWidth, height: tabHeight)
+                : CGRect(x: bounds.minX, y: bounds.midY - tabHeight / 2, width: tabWidth, height: tabHeight)
+            return tabRect.contains(point)
+        }
+
+        let dockWidth = SideDeckLayout.dockWidth
+        let dockRect = dockOnRight
+            ? CGRect(x: bounds.maxX - dockWidth, y: bounds.minY, width: dockWidth, height: bounds.height)
+            : CGRect(x: bounds.minX, y: bounds.minY, width: dockWidth, height: bounds.height)
+
+        if dockRect.contains(point) { return true }
+        guard flyoutOpen else { return false }
+
+        let flyoutRect = dockOnRight
+            ? CGRect(x: bounds.maxX - dockWidth - SideDeckLayout.flyoutGap - flyoutWidth, y: bounds.minY, width: flyoutWidth, height: bounds.height)
+            : CGRect(x: bounds.minX + dockWidth + SideDeckLayout.flyoutGap, y: bounds.minY, width: flyoutWidth, height: bounds.height)
+        return flyoutRect.contains(point)
+    }
+}
+
+// MARK: - Custom Tracking View to handle mouse events, focus, and click-through
 class CustomTrackingView<Content: View>: NSHostingView<Content> {
     var onMouseExit: (() -> Void)?
     private var trackingArea: NSTrackingArea?
-    
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let existing = trackingArea {
@@ -19,138 +59,270 @@ class CustomTrackingView<Content: View>: NSHostingView<Content> {
         addTrackingArea(area)
         trackingArea = area
     }
-    
+
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         onMouseExit?()
     }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeKey()
+        NSApp.activate(ignoringOtherApps: true)
+        super.mouseDown(with: event)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let isRight = AppDelegate.shared?.isDockOnRight ?? true
+        let activeWidget = AppDelegate.shared?.hoverState.activeWidget
+        let layout = AppDelegate.shared?.currentLayout ?? .preferred
+        let flyoutWidth = activeWidget.map { layout.flyoutOuterWidth(for: $0) } ?? 0
+        return PanelHitRegion.contains(
+            point,
+            in: bounds,
+            dockOnRight: isRight,
+            flyoutOpen: activeWidget != nil,
+            flyoutWidth: flyoutWidth,
+            dockCollapsed: AppDelegate.shared?.hoverState.isDockCollapsed ?? false
+        )
+            ? super.hitTest(point)
+            : nil
+    }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+// MARK: - Application Delegate
+class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
     static var shared: AppDelegate?
-    
-    var panel: NSPanel!
+
+    var panel: FloatingPanel!
     var statusItem: NSStatusItem!
-    var isDockOnRight: Bool = false
-    var isExpanded: Bool = false
-    
-    let collapsedWidth: CGFloat = 84
-    let expandedWidth: CGFloat = 380
-    let panelHeight: CGFloat = 620
-    
+    var isDockOnRight: Bool = true
+    var showInDock: Bool = true
+    private var dockScreen: NSScreen?
+
+    let hoverState = SideDeckHoverState()
+    let state = SideDeckState()
+
+    var currentLayout: SideDeckLayout {
+        guard let screen = dockScreen ?? screenUnderMouse() ?? NSScreen.main else {
+            return .preferred
+        }
+        return SideDeckLayout(availableSize: screen.visibleFrame.size)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        hoverState.delegate = self
+
+        // Load saved preferences
+        showInDock = UserDefaults.standard.object(forKey: "showInDock") as? Bool ?? true
+        isDockOnRight = UserDefaults.standard.object(forKey: "isDockOnRight") as? Bool ?? true
+        dockScreen = screenUnderMouse() ?? NSScreen.main
+
+        NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
+
         setupStatusItem()
         setupFloatingPanel()
-        
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(workspaceDidWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
     }
-    
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        updatePanelPosition(animated: false)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        updatePanelPosition(animated: false)
+        panel.orderFrontRegardless()
+        return true
+    }
+
     func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "SideDeck")
+        if statusItem == nil {
+            statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         }
-        
+        if let button = statusItem.button {
+            button.image = NSImage(systemSymbolName: isDockOnRight ? "sidebar.right" : "sidebar.left", accessibilityDescription: "SideDeck")
+        }
+
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Toggle SideDeck (⌥D)", action: #selector(togglePanel), keyEquivalent: "d"))
+        let toggleItem = NSMenuItem(title: "Show/Hide SideDeck", action: #selector(togglePanel), keyEquivalent: "")
+        toggleItem.target = self
+        menu.addItem(toggleItem)
         menu.addItem(NSMenuItem.separator())
-        
+
         let sideItem = NSMenuItem(title: "Dock Position", action: nil, keyEquivalent: "")
         let sideSubmenu = NSMenu()
-        sideSubmenu.addItem(NSMenuItem(title: "Left Edge", action: #selector(dockLeft), keyEquivalent: ""))
-        sideSubmenu.addItem(NSMenuItem(title: "Right Edge", action: #selector(dockRight), keyEquivalent: ""))
+        let leftItem = NSMenuItem(title: "Left Edge", action: #selector(dockLeft), keyEquivalent: "")
+        leftItem.target = self
+        leftItem.state = isDockOnRight ? .off : .on
+        let rightItem = NSMenuItem(title: "Right Edge", action: #selector(dockRight), keyEquivalent: "")
+        rightItem.target = self
+        rightItem.state = isDockOnRight ? .on : .off
+        sideSubmenu.addItem(leftItem)
+        sideSubmenu.addItem(rightItem)
         sideItem.submenu = sideSubmenu
         menu.addItem(sideItem)
-        
+
+        let pinItem = NSMenuItem(title: "Keep Dock Open", action: #selector(togglePinned), keyEquivalent: "")
+        pinItem.target = self
+        pinItem.state = hoverState.isPinned ? .on : .off
+        menu.addItem(pinItem)
+
+        let collapseItem = NSMenuItem(title: "Collapse to Edge", action: #selector(collapseDock), keyEquivalent: "")
+        collapseItem.target = self
+        collapseItem.isEnabled = !hoverState.isDockCollapsed
+        menu.addItem(collapseItem)
+
+        let dockItem = NSMenuItem(title: "Show in macOS Dock", action: #selector(toggleShowInDock), keyEquivalent: "")
+        dockItem.target = self
+        dockItem.state = showInDock ? .on : .off
+        menu.addItem(dockItem)
+
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit SideDeck", action: #selector(quitApp), keyEquivalent: "q"))
+        let quitItem = NSMenuItem(title: "Quit SideDeck", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
         statusItem.menu = menu
     }
-    
+
     func setupFloatingPanel() {
-        panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: collapsedWidth, height: panelHeight),
-            styleMask: [.nonactivatingPanel, .borderless],
+        let layout = currentLayout
+        panel = FloatingPanel(
+            contentRect: NSRect(origin: .zero, size: layout.panelSize),
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
-        
+
         panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.acceptsMouseMovedEvents = true
-        
+        panel.hidesOnDeactivate = false
+        panel.isMovable = false
+
         rebuildHostingView()
         updatePanelPosition(animated: false)
-        panel.orderFront(nil)
+        panel.orderFrontRegardless()
     }
-    
+
     func rebuildHostingView() {
-        let rootView = SideDeckView(isDockOnRight: isDockOnRight)
+        let rootView = SideDeckView(
+            isDockOnRight: isDockOnRight,
+            hoverState: hoverState,
+            state: state,
+            layout: currentLayout
+        )
         let trackingView = CustomTrackingView(rootView: rootView)
         trackingView.onMouseExit = { [weak self] in
             DispatchQueue.main.async {
-                self?.setExpanded(false)
+                self?.hoverState.scheduleCollapseIfOutside(delay: 0.12)
             }
         }
         panel.contentView = trackingView
     }
-    
+
     @objc func screenParametersChanged() {
-        updatePanelPosition(animated: true)
+        if let dockScreen, !NSScreen.screens.contains(where: { $0 === dockScreen }) {
+            self.dockScreen = screenUnderMouse() ?? NSScreen.main
+        }
+        rebuildHostingView()
+        updatePanelPosition(animated: false)
     }
-    
-    func updatePanelPosition(animated: Bool = true) {
-        guard let screen = NSScreen.main else { return }
+
+    @objc func workspaceDidWake() {
+        updatePanelPosition(animated: false)
+    }
+
+    private func screenUnderMouse() -> NSScreen? {
+        let location = NSEvent.mouseLocation
+        return NSScreen.screens.first(where: { $0.frame.contains(location) })
+    }
+
+    func updatePanelPosition(animated: Bool = false) {
+        guard let screen = dockScreen ?? screenUnderMouse() ?? NSScreen.main else { return }
         let visibleFrame = screen.visibleFrame
-        let currentWidth = isExpanded ? expandedWidth : collapsedWidth
-        
+        let layout = SideDeckLayout(availableSize: visibleFrame.size)
+
         let x: CGFloat
         if isDockOnRight {
-            x = visibleFrame.maxX - currentWidth - 8
+            x = visibleFrame.maxX - layout.panelSize.width
         } else {
-            x = visibleFrame.minX + 8
+            x = visibleFrame.minX
         }
-        let y: CGFloat = visibleFrame.midY - (panelHeight / 2)
-        
-        let targetRect = NSRect(x: x, y: y, width: currentWidth, height: panelHeight)
+        let y: CGFloat = visibleFrame.midY - (layout.panelSize.height / 2)
+
+        let targetRect = NSRect(origin: CGPoint(x: x, y: y), size: layout.panelSize)
         panel.setFrame(targetRect, display: true, animate: animated)
     }
-    
-    func setExpanded(_ expanded: Bool) {
-        guard isExpanded != expanded else { return }
-        isExpanded = expanded
-        updatePanelPosition(animated: true)
+
+    func openMenu() {
+        setupStatusItem()
+        statusItem.button?.performClick(nil)
     }
-    
+
+    func refreshDockMenu() {
+        setupStatusItem()
+    }
+
+    func setExpanded(_ expanded: Bool) {
+        updatePanelPosition(animated: false)
+        refreshDockMenu()
+    }
+
+    @objc func togglePinned() {
+        hoverState.togglePinned()
+    }
+
+    @objc func collapseDock() {
+        hoverState.collapseDock()
+    }
+
     @objc func togglePanel() {
         if panel.isVisible {
             panel.orderOut(nil)
         } else {
-            panel.orderFront(nil)
+            updatePanelPosition(animated: false)
+            panel.orderFrontRegardless()
         }
     }
-    
+
+    @objc func toggleShowInDock() {
+        showInDock.toggle()
+        UserDefaults.standard.set(showInDock, forKey: "showInDock")
+        NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
+        setupStatusItem()
+    }
+
     @objc func dockLeft() {
         isDockOnRight = false
+        UserDefaults.standard.set(false, forKey: "isDockOnRight")
+        setupStatusItem()
         rebuildHostingView()
-        updatePanelPosition()
+        updatePanelPosition(animated: false)
     }
-    
+
     @objc func dockRight() {
         isDockOnRight = true
+        UserDefaults.standard.set(true, forKey: "isDockOnRight")
+        setupStatusItem()
         rebuildHostingView()
-        updatePanelPosition()
+        updatePanelPosition(animated: false)
     }
-    
+
     @objc func quitApp() {
         NSApplication.shared.terminate(nil)
     }
@@ -160,5 +332,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
-app.setActivationPolicy(.accessory)
 app.run()

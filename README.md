@@ -27,7 +27,7 @@ SideDeck is a featherweight, native macOS edge dock utility that stays pinned cl
 
 ### Direct Download
 Download the signed DMG directly from Atlas Studios:
-- [Download SideDeck 1.0 DMG](https://tejastelkar.is-a.dev/assets/SideDeck-1.0.dmg)
+- [Download SideDeck 1.1.1 DMG](https://tejastelkar.is-a.dev/assets/SideDeck-1.1.1.dmg)
 
 ### Homebrew Cask
 ```bash
@@ -49,8 +49,17 @@ brew install --cask tejastelkar/tap/sidedeck
 ```bash
 git clone https://github.com/tejastelkar/sidedeck.git
 cd sidedeck
-swift build -c release
 ./scripts/package.sh
+```
+
+The package script selects the full Xcode toolchain when available and writes
+`build/SideDeck.app` plus `build/SideDeck-1.1.1.dmg`. Use `--app-only` for a fast
+local app build, or `--install` to explicitly replace `/Applications/SideDeck.app`.
+
+Run the regression suite with:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test
 ```
 
 ---

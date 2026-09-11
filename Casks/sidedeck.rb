@@ -1,8 +1,8 @@
 cask "sidedeck" do
-  version "1.0.0"
-  sha256 "948320d00b50e42053068f01c25e24ae9a24bd1de394a014aa83b08edc64e75a"
+  version "1.1.1"
+  sha256 "98099b7be3f21896fc7f7d416a791202f896ce3ca0ca8a441438bf74e843d01d"
 
-  url "https://tejastelkar.is-a.dev/assets/SideDeck-1.0.dmg"
+  url "https://tejastelkar.is-a.dev/assets/SideDeck-1.1.1.dmg"
   name "SideDeck"
   desc "Ambient floating edge dock utility for macOS"
   homepage "https://tejastelkar.is-a.dev/sidedeck"
