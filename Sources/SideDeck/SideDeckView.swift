@@ -58,6 +58,10 @@ enum SideDeckTheme {
     }
 }
 
+enum SideDeckSymbols {
+    static let wifi = "wifi"
+}
+
 // MARK: - Visual Effect Blur View for macOS Glassmorphism
 struct VisualEffectBlur: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .popover
@@ -1424,26 +1428,15 @@ struct RacetrackOutlineShape: Shape {
     }
 }
 
-// MARK: - Wi-Fi SVG Glyph
+// MARK: - Standard Apple Wi-Fi Glyph
 struct WifiIconGlyph: View {
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            Path { p in
-                p.move(to: CGPoint(x: w * 0.1, y: h * 0.3))
-                p.addQuadCurve(to: CGPoint(x: w * 0.9, y: h * 0.3), control: CGPoint(x: w * 0.5, y: -h * 0.2))
-
-                p.move(to: CGPoint(x: w * 0.25, y: h * 0.6))
-                p.addQuadCurve(to: CGPoint(x: w * 0.75, y: h * 0.6), control: CGPoint(x: w * 0.5, y: h * 0.25))
-            }
-            .stroke(SideDeckTheme.primaryText, style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
-
-            Path { p in
-                p.addArc(center: CGPoint(x: w * 0.5, y: h * 0.85), radius: 1.2, startAngle: .degrees(0), endAngle: .degrees(360), clockwise: true)
-            }
-            .fill(SideDeckTheme.primaryText)
-        }
+        Image(systemName: SideDeckSymbols.wifi)
+            .resizable()
+            .scaledToFit()
+            .symbolRenderingMode(.monochrome)
+            .foregroundColor(SideDeckTheme.primaryText)
+            .accessibilityHidden(true)
     }
 }
 
