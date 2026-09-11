@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import SideDeck
 
 @MainActor
@@ -287,6 +288,15 @@ final class PanelHitRegionTests: XCTestCase {
 
         XCTAssertTrue(PanelHitRegion.contains(CGPoint(x: 552, y: 330), in: bounds, dockOnRight: true, flyoutOpen: false, dockCollapsed: true))
         XCTAssertFalse(PanelHitRegion.contains(CGPoint(x: 530, y: 100), in: bounds, dockOnRight: true, flyoutOpen: false, dockCollapsed: true))
+    }
+}
+
+@MainActor
+final class CustomTrackingViewTests: XCTestCase {
+    func testFirstClickIsAcceptedWhileAnotherAppIsActive() {
+        let view = CustomTrackingView(rootView: EmptyView())
+
+        XCTAssertTrue(view.acceptsFirstMouse(for: nil))
     }
 }
 

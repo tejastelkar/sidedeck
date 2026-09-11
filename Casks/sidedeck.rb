@@ -1,6 +1,6 @@
 cask "sidedeck" do
   version "1.2.0"
-  sha256 "68b6cf2da0ca45431803a6f7daabd6df22758cd87491759ce6ef879c0b1c4d38"
+  sha256 "bc3b70e9a3719f0f5b639a2ab6f78c56b8b848852db5e454d87df2534ff3801e"
 
   url "https://tejastelkar.is-a.dev/assets/SideDeck-1.2.0.dmg"
   name "SideDeck"

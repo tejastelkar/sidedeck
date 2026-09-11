@@ -66,6 +66,10 @@ class CustomTrackingView<Content: View>: NSHostingView<Content> {
         onMouseExit?()
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func mouseDown(with event: NSEvent) {
         window?.makeKey()
         NSApp.activate(ignoringOtherApps: true)
