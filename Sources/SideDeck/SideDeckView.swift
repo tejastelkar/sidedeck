@@ -1748,6 +1748,30 @@ struct SettingsFlyout: View {
                         Button("Restore customization defaults") { store.reset() }
                             .buttonStyle(.bordered)
                     }
+
+                    settingsSection("Support Developer") {
+                        Text("Handcrafted by Tejas Telkar in Pune, India. Free and open source.")
+                            .font(.system(size: 11))
+                            .foregroundColor(SideDeckTheme.secondaryText)
+                        Button(action: {
+                            if let url = URL(string: "https://ko-fi.com/tejastelkar") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "cup.and.saucer.fill")
+                                    .font(.system(size: 11))
+                                Text("Support on Ko-fi (ko-fi.com/tejastelkar)")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .background(Color(hex: 0x0068FE))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.trailing, 6)
             }

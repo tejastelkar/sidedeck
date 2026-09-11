@@ -212,6 +212,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
         menu.addItem(dockItem)
 
         menu.addItem(NSMenuItem.separator())
+        let donateItem = NSMenuItem(title: "Support Developer on Ko-fi…", action: #selector(openDonate), keyEquivalent: "")
+        donateItem.target = self
+        menu.addItem(donateItem)
+
         let quitItem = NSMenuItem(title: "Quit SideDeck", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -367,6 +371,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, SideDeckHostDelegate {
         case .system: panel?.appearance = nil
         case .dark: panel?.appearance = NSAppearance(named: .darkAqua)
         case .light: panel?.appearance = NSAppearance(named: .aqua)
+        }
+    }
+
+    @objc func openDonate() {
+        if let url = URL(string: "https://ko-fi.com/tejastelkar") {
+            NSWorkspace.shared.open(url)
         }
     }
 
