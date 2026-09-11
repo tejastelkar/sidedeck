@@ -87,5 +87,15 @@ struct TestRenderer {
             },
             name: "dock_settings_light"
         )
+
+        // 13. Habits contrast in light mode
+        hoverState.toggleSettings()
+        hoverState.hoverCard(.habits)
+        renderView(
+            SideDeckThemeContainer(store: preferencesStore) {
+                SideDeckView(isDockOnRight: true, hoverState: hoverState, state: state, preferencesStore: preferencesStore, layout: preferredLayout)
+            },
+            name: "dock_habits_light"
+        )
     }
 }

@@ -31,7 +31,8 @@ enum SideDeckTheme {
     static let surface = Color(light: 0xFFFFFF, dark: 0x171A1F)
     static let elevatedSurface = Color(light: 0xF3F6FA, dark: 0x1D2127)
     static let accent = Color.accentColor
-    static let onAccent = Color.white
+    /// Foreground for text and symbols drawn over a solid accent fill.
+    static let filledControlForeground = Color.white
     static let primaryText = Color(light: 0x15181D, dark: 0xF5F7FA)
     static let secondaryText = Color(light: 0x626A76, dark: 0x9299A6)
     static let tertiaryText = Color(light: 0x858D99, dark: 0x69717E)
@@ -1923,7 +1924,7 @@ struct FocusFlyout: View {
                         .overlay(
                             Image(systemName: "plus")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(SideDeckTheme.primaryText)
+                                .foregroundColor(SideDeckTheme.filledControlForeground)
                         )
                 }
                 .buttonStyle(.plain)
@@ -2011,7 +2012,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("System")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 0 ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 0 ? SideDeckTheme.filledControlForeground : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(state.hourModeIndex == 0 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
@@ -2024,7 +2025,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("12-hour")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 1 ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 1 ? SideDeckTheme.filledControlForeground : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(state.hourModeIndex == 1 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
@@ -2037,7 +2038,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("24-hour")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.hourModeIndex == 2 ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.hourModeIndex == 2 ? SideDeckTheme.filledControlForeground : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8).padding(.vertical, 4)
                             .background(state.hourModeIndex == 2 ? SideDeckTheme.accent : Color.clear)
                             .cornerRadius(SideDeckTheme.Radius.button)
@@ -2065,7 +2066,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("Seconds")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.showSeconds ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.showSeconds ? SideDeckTheme.filledControlForeground : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(state.showSeconds ? SideDeckTheme.accent : Color.clear)
@@ -2079,7 +2080,7 @@ struct ClockFlyout: View {
                     }) {
                         Text("Date")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(state.showDateOnCard ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.55))
+                            .foregroundColor(state.showDateOnCard ? SideDeckTheme.filledControlForeground : SideDeckTheme.primaryText.opacity(0.55))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(state.showDateOnCard ? SideDeckTheme.accent : Color.clear)
@@ -2169,7 +2170,7 @@ struct StatusFlyout: View {
                 Button(action: { state.toggleWifiPower() }) {
                     Text(state.isWifiOn ? "On" : "Off")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(state.isWifiOn ? SideDeckTheme.onAccent : SideDeckTheme.primaryText.opacity(0.5))
+                        .foregroundColor(state.isWifiOn ? SideDeckTheme.filledControlForeground : SideDeckTheme.primaryText.opacity(0.5))
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(state.isWifiOn ? SideDeckTheme.accent : SideDeckTheme.primaryText.opacity(0.1))
                         .cornerRadius(SideDeckTheme.Radius.button)
@@ -2258,7 +2259,7 @@ struct HabitsFlyout: View {
                 Button(action: { state.checkInToday() }) {
                     Text("Check in Today")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(SideDeckTheme.primaryText)
+                        .foregroundColor(SideDeckTheme.filledControlForeground)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(SideDeckTheme.accent)
                         .cornerRadius(SideDeckTheme.Radius.button)
@@ -2347,7 +2348,7 @@ struct HabitsFlyout: View {
                     ForEach(doneTasks) { t in
                         HStack(spacing: 8) {
                             Circle().fill(SideDeckTheme.accent).frame(width: 14, height: 14)
-                                .overlay(Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundColor(SideDeckTheme.primaryText))
+                                .overlay(Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundColor(SideDeckTheme.filledControlForeground))
                             Text(t.text).font(.system(size: 12)).strikethrough().foregroundColor(SideDeckTheme.secondaryText)
                             Spacer()
                         }
@@ -2404,7 +2405,7 @@ struct HydrationFlyout: View {
                             Text("+250ml")
                                 .font(.system(size: 12, weight: .semibold))
                         }
-                        .foregroundColor(SideDeckTheme.primaryText)
+                        .foregroundColor(SideDeckTheme.filledControlForeground)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
@@ -2589,7 +2590,7 @@ struct NotesFlyout: View {
                         .overlay(
                             Image(systemName: "plus")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(SideDeckTheme.primaryText)
+                                .foregroundColor(SideDeckTheme.filledControlForeground)
                         )
                 }
                 .buttonStyle(.plain)
