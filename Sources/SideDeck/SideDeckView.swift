@@ -791,6 +791,11 @@ struct FlyoutCalloutShape: Shape {
     var beakY: CGFloat
     var isPointingLeft: Bool = true
 
+    var animatableData: CGFloat {
+        get { beakY }
+        set { beakY = newValue }
+    }
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let w = rect.width
@@ -929,6 +934,8 @@ struct SideDeckView: View {
 
                 flyoutWrapper(for: active, beakY: coords.beakY)
                     .offset(x: flyoutX, y: coords.y)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.84), value: coords.y)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.84), value: coords.beakY)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.95).combined(with: .opacity).combined(with: .offset(x: isDockOnRight ? 12 : -12)),
                         removal: .scale(scale: 0.95).combined(with: .opacity)
@@ -1183,7 +1190,11 @@ struct FocusCard: View {
     var body: some View {
         VStack(spacing: 8) {
             // Squircle Bolt Ring - Clicking toggles Play / Pause
-            Button(action: { state.toggleFocusTimer() }) {
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    state.toggleFocusTimer()
+                }
+            }) {
                 ZStack {
                     SquircleTrackShape()
                         .stroke(Color(hex: 0x262626), lineWidth: 9.6)
@@ -1201,10 +1212,10 @@ struct FocusCard: View {
                         )
                         .frame(width: 56.56, height: 56.56)
                         .rotationEffect(.degrees(-90))
+                        .animation(.easeInOut(duration: 0.35), value: state.focusRemaining)
 
-                    SydedockBoltGlyph()
+                    SydedockBoltGlyph(isRunning: state.isFocusRunning)
                         .frame(width: 22, height: 26)
-                        .opacity(state.isFocusRunning ? 1.0 : 0.65)
                 }
             }
             .buttonStyle(.plain)
@@ -1277,6 +1288,9 @@ struct SquircleTrackShape: Shape {
 
 // MARK: - Exact Sydedock Lightning Bolt SVG Glyph
 struct SydedockBoltGlyph: View {
+    var isRunning: Bool = false
+    @State private var isPulsing: Bool = false
+
     var body: some View {
         GeometryReader { geo in
             Path { p in
@@ -1292,6 +1306,26 @@ struct SydedockBoltGlyph: View {
                 p.closeSubpath()
             }
             .fill(SideDeckTheme.primaryText)
+            .opacity(isRunning ? (isPulsing ? 1.0 : 0.72) : 0.65)
+            .scaleEffect(isRunning ? (isPulsing ? 1.05 : 0.96) : 1.0)
+            .shadow(
+                color: isRunning ? SideDeckTheme.accent.opacity(isPulsing ? 0.45 : 0.12) : .clear,
+                radius: 4,
+                x: 0,
+                y: 0
+            )
+            .animation(
+                isRunning
+                    ? .easeInOut(duration: 1.1).repeatForever(autoreverses: true)
+                    : .default,
+                value: isPulsing
+            )
+            .onAppear {
+                if isRunning { isPulsing = true }
+            }
+            .onChange(of: isRunning) { _, running in
+                isPulsing = running
+            }
         }
     }
 }
@@ -1372,6 +1406,7 @@ struct StatusCard: View {
                     style: StrokeStyle(lineWidth: 2.8, lineCap: .round)
                 )
                 .frame(width: 72, height: 28)
+                .animation(.spring(response: 0.45, dampingFraction: 0.8), value: state.batteryLevel)
 
             // Inside Racetrack: Real % on left, Wi-Fi icon on right
             HStack(spacing: 0) {
@@ -1451,23 +1486,11 @@ struct HabitsCard: View {
         ) {
             ForEach(0..<state.habitMatrix.count, id: \.self) { idx in
                 let val = state.habitMatrix[idx]
-                Button(action: { state.toggleHabitCell(at: idx) }) {
-                    if val == 0 {
-                        Circle()
-                            .fill(SideDeckTheme.primaryText.opacity(0.05))
-                            .frame(width: 6.3, height: 6.3)
-                            .overlay(Circle().stroke(SideDeckTheme.primaryText.opacity(0.3), lineWidth: 0.6))
-                    } else if val == 1 {
-                        Circle().fill(SideDeckTheme.primaryText.opacity(0.35)).frame(width: 6.3, height: 6.3)
-                    } else if val == 2 {
-                        Circle().fill(Color(hex: 0xa1a1a1)).frame(width: 6.3, height: 6.3)
-                    } else if val == 3 {
-                        Circle().fill(SideDeckTheme.primaryText.opacity(0.75)).frame(width: 6.3, height: 6.3)
-                    } else {
-                        Circle().fill(SideDeckTheme.primaryText).frame(width: 6.3, height: 6.3)
+                HabitCellDot(val: val) {
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.62)) {
+                        state.toggleHabitCell(at: idx)
                     }
                 }
-                .buttonStyle(.plain)
             }
         }
         .frame(width: 80.08, height: 80.08)
@@ -1475,10 +1498,47 @@ struct HabitsCard: View {
     }
 }
 
+private struct HabitCellDot: View {
+    let val: Int
+    let action: () -> Void
+    @State private var isPressed: Bool = false
+
+    var body: some View {
+        Button(action: {
+            isPressed = true
+            action()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+                isPressed = false
+            }
+        }) {
+            Group {
+                if val == 0 {
+                    Circle()
+                        .fill(SideDeckTheme.primaryText.opacity(0.05))
+                        .frame(width: 6.3, height: 6.3)
+                        .overlay(Circle().stroke(SideDeckTheme.primaryText.opacity(0.3), lineWidth: 0.6))
+                } else if val == 1 {
+                    Circle().fill(SideDeckTheme.primaryText.opacity(0.35)).frame(width: 6.3, height: 6.3)
+                } else if val == 2 {
+                    Circle().fill(Color(hex: 0xa1a1a1)).frame(width: 6.3, height: 6.3)
+                } else if val == 3 {
+                    Circle().fill(SideDeckTheme.primaryText.opacity(0.75)).frame(width: 6.3, height: 6.3)
+                } else {
+                    Circle().fill(SideDeckTheme.primaryText).frame(width: 6.3, height: 6.3)
+                }
+            }
+            .scaleEffect(isPressed ? 1.35 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.58), value: isPressed)
+            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: val)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - CARD 5: HYDRATION CARD (Dynamic Water Height)
 struct HydrationCard: View {
     @ObservedObject var state: SideDeckState
-    var wavePhase: Double
+    var wavePhase: Double = 0
 
     var countdownString: String {
         let mins = String(format: "%02d", state.nextDrinkSeconds / 60)
@@ -1494,31 +1554,36 @@ struct HydrationCard: View {
 
     var body: some View {
         ZStack {
-            // Dynamic Fluid Sine-Wave Water Reservoir
+            // Dynamic Fluid Sine-Wave Water Reservoir with continuous ProMotion physics
             VStack {
                 Spacer()
-                ZStack {
-                    WaveShape(phase: wavePhase + .pi, amplitude: 2.2, wavelength: 40)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: 0x00e1ff).opacity(0.6), Color(hex: 0x1b79ff).opacity(0.7)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                TimelineView(.animation) { timeline in
+                    let time = timeline.date.timeIntervalSinceReferenceDate
+                    let p1 = time * 2.8
+                    let p2 = time * 1.9 + .pi
+                    ZStack {
+                        WaveShape(phase: p2, amplitude: 2.2, wavelength: 38)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: 0x00e1ff).opacity(0.55), Color(hex: 0x1b79ff).opacity(0.65)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
-                        .frame(height: dynamicWaveHeight + 4)
+                            .frame(height: dynamicWaveHeight + 4)
 
-                    WaveShape(phase: wavePhase, amplitude: 2.5, wavelength: 45)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: 0x00e1ff), Color(hex: 0x1b79ff)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                        WaveShape(phase: p1, amplitude: 2.6, wavelength: 44)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: 0x00e1ff), Color(hex: 0x1b79ff)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
-                        .frame(height: dynamicWaveHeight)
+                            .frame(height: dynamicWaveHeight)
+                    }
+                    .animation(.spring(response: 0.55, dampingFraction: 0.76), value: dynamicWaveHeight)
                 }
-                .animation(.spring(response: 0.55, dampingFraction: 0.8), value: dynamicWaveHeight)
             }
             .clipShape(RoundedRectangle(cornerRadius: SideDeckTheme.Radius.hydrationCard, style: .continuous))
 
@@ -1831,19 +1896,31 @@ struct FocusFlyout: View {
 
                 // Quick timer preset pills
                 HStack(spacing: 4) {
-                    Button(action: { state.resetFocusTimer(to: 25) }) {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            state.resetFocusTimer(to: 25)
+                        }
+                    }) {
                         Text("25m").font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 6).padding(.vertical, 3)
                             .background(SideDeckTheme.primaryText.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
                     }.buttonStyle(.plain)
 
-                    Button(action: { state.resetFocusTimer(to: 15) }) {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            state.resetFocusTimer(to: 15)
+                        }
+                    }) {
                         Text("15m").font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 6).padding(.vertical, 3)
                             .background(SideDeckTheme.primaryText.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
                     }.buttonStyle(.plain)
 
-                    Button(action: { state.resetFocusTimer(to: 5) }) {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            state.resetFocusTimer(to: 5)
+                        }
+                    }) {
                         Text("5m").font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 6).padding(.vertical, 3)
                             .background(SideDeckTheme.primaryText.opacity(0.1)).cornerRadius(SideDeckTheme.Radius.micro)
@@ -2415,7 +2492,11 @@ struct HydrationFlyout: View {
                             .foregroundColor(SideDeckTheme.primaryText)
                     }
                     Spacer()
-                    Button(action: { state.addDrink(amount: 250) }) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
+                            state.addDrink(amount: 250)
+                        }
+                    }) {
                         HStack(spacing: 4) {
                             Image(systemName: "drop.fill")
                                 .font(.system(size: 12))
@@ -2446,13 +2527,21 @@ struct HydrationFlyout: View {
 
                 // Quick log presets
                 HStack(spacing: 6) {
-                    Button(action: { state.addDrink(amount: 150) }) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
+                            state.addDrink(amount: 150)
+                        }
+                    }) {
                         Text("+150ml").font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 8).padding(.vertical, 5)
                             .background(SideDeckTheme.primaryText.opacity(0.08)).cornerRadius(SideDeckTheme.Radius.field)
                     }.buttonStyle(.plain)
 
-                    Button(action: { state.addDrink(amount: 500) }) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
+                            state.addDrink(amount: 500)
+                        }
+                    }) {
                         Text("+500ml").font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundColor(SideDeckTheme.primaryText).padding(.horizontal, 8).padding(.vertical, 5)
                             .background(SideDeckTheme.primaryText.opacity(0.08)).cornerRadius(SideDeckTheme.Radius.field)
@@ -2460,7 +2549,11 @@ struct HydrationFlyout: View {
 
                     Spacer()
 
-                    Button(action: { state.resetWater() }) {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
+                            state.resetWater()
+                        }
+                    }) {
                         Text("Reset").font(.system(size: 11, weight: .regular))
                             .foregroundColor(SideDeckTheme.primaryText.opacity(0.4)).padding(.horizontal, 8).padding(.vertical, 5)
                     }.buttonStyle(.plain)
